@@ -1,0 +1,421 @@
+Option Compare Database
+Option Explicit
+
+Public Function ComprobarVinculos()
+    On Error GoTo HandleError
+    Dim strCurDir As String, intR As Integer, strSQL As String, strCarDatos As String, strCarVentas As String
+    strCurDir = miDirectorioDe(CurrentDb.Name)
+    If strCurDir = DLookup("DirectorioDeConexion", "1myConexionTablas", "NombreTabla = '-X-X-'") Then
+    Else
+'CFG + DAT
+        Dim strC As String, fso As FileSystemObject, strF As String
+        strC = DirectorioDe(CurrentDb.Name)
+        strC = Nz(DimeCarpeta(strC, "Indique carpeta de datos de G4"), "")
+        If strC = "" Then GoTo Finish
+        strC = strC & "\"
+        'strF = "G4_cfg.accdb"
+        'CurrentDb.Execute "UPDATE 1myConexionTablas SET DirectorioDeConexion = " & ConComillas(strC) & _
+                          " WHERE NombreTabla = 'cfgParam'", dbFailOnError
+        'ReconectarTablasYaVinculadas strF
+        strF = Nz(DLookup("FicheroDeconexion", "1myConexionTablas", "NombreTabla = 'tbClientes'"), "G4_dat.accdb")
+        CurrentDb.Execute "UPDATE 1myConexionTablas SET DirectorioDeConexion = " & ConComillas(strC) & _
+                          " WHERE FicheroDeConexion = '" & strF & "'", dbFailOnError
+        ReconectarTablasYaVinculadas strF
+            
+Finish:
+        strSQL = "UPDATE 1myConexionTablas SET [1myConexionTablas].DirectorioDeConexion = '" & strCurDir & "'"
+        strSQL = strSQL & " WHERE ((([1myConexionTablas].NombreTabla)='-X-X-'));"
+        CurrentDb.Execute strSQL, dbFailOnError
+    End If
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Private Function miDirectorioDe(strFullPath As String) As String
+    Dim i As Integer
+    On Error GoTo Error_miDirectorioDe
+    For i = Len(strFullPath) To 1 Step -1
+        If Mid(strFullPath, i, 1) = "\" Then
+            miDirectorioDe = Left(strFullPath, i)
+            Exit For
+        End If
+    Next i
+Salir_miDirectorioDe:
+    Exit Function
+Error_miDirectorioDe:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en miDirectorioDe" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_miDirectorioDe
+End Function
+
+
+Public Function ComprobarOpciones()
+    On Error GoTo Error_ComprobarOpciones
+    Dim rs As Recordset, v As Variant, vOld As Variant, intCambiar As Integer
+    Set rs = CurrentDb.OpenRecordset("SELECT * FROM SysOpciones WHERE Activar = True")
+    While Not rs.EOF
+        vOld = Application.GetOption(rs("ArgumentoOpcion"))
+        intCambiar = False
+        Select Case rs("TipoOpcion")
+            Case 1
+                If vOld <> rs("OP_SN") Then
+                    v = rs("OP_SN")
+                    intCambiar = True
+                End If
+            Case 2
+                If vOld <> rs("OP_TXT") Then
+                    v = rs("OP_TXT")
+                    intCambiar = True
+                End If
+            Case 3
+                If vOld <> rs("OP_NUM") Then
+                    v = rs("OP_NUM")
+                    intCambiar = True
+                End If
+        End Select
+        rs.Edit
+        If intCambiar = False Then
+            rs("Cambiado") = False
+        Else
+            SetOption rs("ArgumentoOpcion"), v
+            rs("Cambiado") = True
+            Select Case rs("TipoOpcion")
+                Case 1
+                    rs("OP_SN_OLD") = vOld
+                Case 2
+                    rs("OP_TXT_OLD") = vOld
+                Case 3
+                    rs("OP_NUM_OLD") = vOld
+            End Select
+        End If
+        rs.Update
+        rs.MoveNext
+    Wend
+Salir_ComprobarOpciones:
+    Exit Function
+Error_ComprobarOpciones:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ComprobarOpciones" & vbCrLf & Err.Description
+            Resume Salir_ComprobarOpciones
+    End Select
+    
+End Function
+Public Function ReponerOpciones()
+    On Error GoTo Error_ReponerOpciones
+    Dim rs As Recordset, v As Variant, intCambiar As Integer
+    
+    Set rs = CurrentDb.OpenRecordset("SELECT * FROM SysOpciones WHERE Activar = True AND Cambiado = True")
+    While Not rs.EOF
+        Select Case rs("TipoOpcion")
+            Case 1
+                v = rs("OP_SN_OLD")
+            Case 2
+                v = rs("OP_TXT_OLD")
+            Case 3
+                v = rs("OP_NUM_OLD")
+        End Select
+        SetOption rs("ArgumentoOpcion"), v
+        rs.MoveNext
+    Wend
+Salir_ReponerOpciones:
+    Exit Function
+Error_ReponerOpciones:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ReponerOpciones" & vbCrLf & Err.Description
+            Resume Salir_ReponerOpciones
+    End Select
+    
+End Function
+
+Public Function Titulo_e_Icono()
+    Dim intX As Integer
+    Dim strTitulo As String, strIco As String
+    strTitulo = Nz(DameValorParam("AplicacionTitulo"), "C4")
+    intX = AddPropAp("AppTitle", dbText, strTitulo)
+    strIco = DimeDondeEsta(Nz(DameValorParam("AplicacionIcono"), "Images\C4.ico"))
+    intX = AddPropAp("AppIcon", dbText, strIco)
+    RefreshTitleBar
+End Function
+
+Public Function AddPropAp(strName As String, varType As Variant, varValue As Variant) As Integer
+    Dim dbs As Database, prp As Object
+    Const conPropNotFoundError = 3270
+
+    Set dbs = CurrentDb
+    On Error GoTo AddProp_Err
+    dbs.Properties(strName) = varValue
+
+AddPropAp = True
+
+AddProp_Bye:
+    Exit Function
+
+AddProp_Err:
+    If Err = conPropNotFoundError Then
+        Set prp = dbs.CreateProperty(strName, varType, varValue)
+        dbs.Properties.Append prp
+        Resume Next
+    Else
+        AddPropAp = False
+        Resume AddProp_Bye
+    End If
+End Function
+
+Public Function DimeDondeEsta(strFile As String) As String
+' Si en strFile no existe una unidad (:) ni una dirección de red (empieza por \\) devuelve
+' el path completo de la situación relativa.... ejem
+    Dim strX As String, i As Integer
+    On Error GoTo Error_DimeDondeEsta
+    If InStr(strFile, "\\") = 1 Then
+        DimeDondeEsta = strFile
+        Exit Function
+    End If
+    If InStr(strFile, ":") > 0 Then
+        DimeDondeEsta = strFile
+        Exit Function
+    End If
+    strX = DameValorParam("AplicacionCurrentDir")
+    strX = strX & "\" & strFile
+Quitar2Barras:
+    i = InStr(strX, "\\")
+    If i > 0 Then
+        strX = Left(strX, i) & Mid(strX, i + 2)
+        GoTo Quitar2Barras
+    End If
+    DimeDondeEsta = strX
+Salir_DimeDondeEsta:
+    Exit Function
+Error_DimeDondeEsta:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en DimeDondeEsta" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_DimeDondeEsta
+End Function
+
+Public Function DimePathRelativo(strFile As String) As String
+' Si en strFile no existe una unidad (:) ni una dirección de red (empieza por \\) devuelve
+' el path completo de la situación relativa.... ejem
+    Dim strCurDir As String, i As Integer
+    On Error GoTo Error_DimePathRelativo
+    strCurDir = DameValorParam("AplicacionCurrentDir")
+    If InStr(strFile, strCurDir) = 1 Then
+        strFile = Mid(strFile, Len(strCurDir) + 1)
+    End If
+    DimePathRelativo = strFile
+Salir_DimePathRelativo:
+    Exit Function
+Error_DimePathRelativo:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en DimePathRelativo" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_DimePathRelativo
+End Function
+
+Public Sub TipoAplicacion()
+End Sub
+
+Public Function BarraBasica()
+    Dim barra As Object
+    'Dim lngIdPuesto  As Long, intServidor As Integer
+    On Error Resume Next
+    For Each barra In Application.CommandBars
+        barra.Visible = False
+    Next
+    'lngIdPuesto = Nz(DLookup("IdPuesto", "cfgPuestos", "NombrePuesto= " & ConComillas(Nz(DameValorParam("PuestoNombre"), ""))), 0)
+    'intServidor = Nz(DLookup("ServidorSN", "cfgPuestos", "IdPuesto= " & lngIdPuesto), False)
+    
+    Application.CommandBars("Basica").Visible = Nz(DameValorParam("PuestoBarraBasicaVisibleSN"), False)
+    Set barra = CommandBars.ActiveMenuBar
+    If Nz(DameValorParam("PuestoBarraMenusVisibleSN"), False) = True Then
+        Application.CommandBars("Basica").Left = 0
+        barra.Enabled = True
+    Else
+        barra.Enabled = False
+    End If
+End Function
+
+Public Function Autoexec()
+    On Error GoTo Error_Autoexec
+    Call ComprobarVinculos
+    Call ComprobarCampos
+    DoCmd.OpenForm "frmMenu"
+    DoCmd.Maximize
+Salir_Autoexec:
+    Exit Function
+Error_Autoexec:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en Autoexec" & vbCrLf & Err.Description
+            Resume Salir_Autoexec
+    End Select
+End Function
+
+Public Function DimeConexionesDatos()
+    On Error GoTo HandleError
+    Dim strConn As String, strPre As String, strDir As String, strFile As String, strCurrentDir As String
+    Dim strR As String, strV As String
+    Dim dbf As TableDef, i As Integer, j As Integer
+    For Each dbf In CurrentDb.TableDefs
+        strConn = dbf.Connect
+        If Len(strConn) = 0 Then
+        Else
+            strPre = IniDeConexion(strConn)
+            strDir = DirectorioDeConexion(strConn)
+            strFile = FileDeConexion(strConn)
+            strV = ""
+            If strPre = ";DATABASE=" Then
+                strV = strDir & strFile
+            ElseIf strPre Like "Excel*" Then
+                strV = strDir & strFile
+            ElseIf strPre Like "ODBC*" Then
+                j = 0
+                i = InStr(strPre, "SERVER=")
+                If i > 0 Then j = InStr(i, strPre, ";")
+                If j > 0 Then
+                    strV = Mid(strPre, 1, j - 1)
+                End If
+            End If
+            If strV <> "" Then
+                If InStr(strR, strV & vbCrLf) = 0 Then strR = strR & strV & vbCrLf
+            End If
+        End If
+    Next dbf
+    DimeConexionesDatos = strR
+        
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+
+Private Function IniDeConexion(strConnect As String) As String
+    Dim i As Integer, j As Integer, j2 As Integer
+    On Error GoTo Error_IniDeConexion
+    j = InStr(strConnect, ";")
+    j2 = InStr(j + 1, strConnect, "DATABASE=")
+    If j2 = 0 Then
+        j2 = j + 1
+    Else
+        j2 = j2 + 9
+    End If
+    IniDeConexion = Left(strConnect, j2 - 1)
+Salir_IniDeConexion:
+    Exit Function
+Error_IniDeConexion:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en IniDeConexion" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_IniDeConexion
+End Function
+
+Private Function FileDeConexion(strConnect As String) As String
+    Dim i As Integer, j As Integer, j2 As Integer
+    On Error GoTo Error_FileDeConexion
+    j = InStr(strConnect, ";")
+    j2 = InStr(j + 1, strConnect, "DATABASE=")
+    If j2 = 0 Then
+        j2 = j + 1
+    Else
+        j2 = j2 + 9
+    End If
+    FileDeConexion = FileDe(Mid(strConnect, j2))
+Salir_FileDeConexion:
+    Exit Function
+Error_FileDeConexion:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en FileDeConexion" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_FileDeConexion
+End Function
+
+
+Private Function DirectorioDeConexion(strConnect As String) As String
+    Dim i As Integer, j As Integer, j2 As Integer
+    On Error GoTo Error_DirectorioDeConexion
+    j = InStr(strConnect, ";")
+    j2 = InStr(j + 1, strConnect, "DATABASE=")
+    If j2 = 0 Then
+        j2 = j + 1
+    Else
+        j2 = j2 + 9
+    End If
+    DirectorioDeConexion = DirectorioDe(Mid(strConnect, j2))
+Salir_DirectorioDeConexion:
+    Exit Function
+Error_DirectorioDeConexion:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en DirectorioDeConexion" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_DirectorioDeConexion
+End Function
+
+
+Private Function FileDe(strFullPath As String) As String
+    Dim i As Integer
+    On Error GoTo Error_FileDe
+    For i = Len(strFullPath) To 1 Step -1
+        If Mid(strFullPath, i, 1) = "\" Then
+'            strElArchivo = Right(strFullPath, Len(strFullPath) - i)
+'            strElDirectorio = Left(strFullPath, i)
+            FileDe = Right(strFullPath, Len(strFullPath) - i)
+            Exit For
+        End If
+    Next i
+Salir_FileDe:
+    Exit Function
+Error_FileDe:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº: " & Err & " en FileDe" & vbCrLf & Err.Description
+    End Select
+    Resume Salir_FileDe
+End Function
+
+
+Function ConexionDatosTestSN() As Integer
+    On Error GoTo HandleError
+    Dim intR As Integer, strCD As String
+    strCD = DimeConexionesDatos()
+    intR = InStr(strCD, "GenDoc_dat.accdb") = 0
+    intR = intR And InStr(strCD, "SERVER=SVR03") = 0
+    ConexionDatosTestSN = intR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function ConComillas(strCad As String) As String
+' Devuelve la misma cadena delimitada con comillas--> de Lorenzo---> "Lorenzo"
+    On Error GoTo Error_ConComillas
+    Dim strComilla As String
+    strComilla = Chr(34)
+    ConComillas = strComilla & strCad & strComilla
+Salir_ConComillas:
+    Exit Function
+Error_ConComillas:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ConComillas" & vbCrLf & Err.Description
+            Resume Salir_ConComillas
+    End Select
+
+End Function

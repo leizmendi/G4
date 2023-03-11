@@ -1,0 +1,178 @@
+Option Compare Database
+Option Explicit
+
+Public Sub BloqueoFormulario(frm As Form, Optional ByRef intLock As Integer = 22, Optional EsLock2 As Integer = 1)
+    Dim ctl As Control, lngColor As Long, lngColor2 As Long
+    Dim ob As Object, strLock As String, i As Integer
+    On Error GoTo Error_BloqueoFormulario
+    'Si no se ha pasado intLock, buscarla en el formulario,
+    Select Case EsLock2
+        Case 1
+            strLock = "LockUn"
+        Case 2
+            strLock = "Lock2"
+    End Select
+    If intLock = 22 Then
+        For Each ctl In frm.Controls
+            If InStr(ctl.Tag, strLock) > 0 Then
+                intLock = Not ctl.Locked
+                Exit For
+            End If
+        Next ctl
+    End If
+    If intLock = False Then
+        i = InStr(frm.Tag, "NotF8")
+        If i > 0 Then
+            MsgBox "No se puede modificar: " & Mid(frm.Tag, i + 5)
+            Exit Sub
+        End If
+    End If
+    If intLock = 22 Then Exit Sub
+    '.......................................................
+    If intLock = True Then
+        lngColor = RGB(218, 218, 218) '12632256
+        lngColor2 = RGB(255, 255, 242) '16777215
+    Else
+        lngColor = 16777215
+        lngColor2 = 12632256
+    End If
+    frm.DatasheetBackColor = lngColor
+    frm.DatasheetGridlinesColor = lngColor2
+'    frm.AllowAdditions = Not intLock
+    Select Case frm.Name
+        'formularios donde no se modifica la propiedad AllowDeletions borrar registros..........
+        Case "frmfacturas"
+        Case Else
+            frm.AllowDeletions = Not intLock
+    End Select
+    Select Case frm.Name
+        'formularios donde no se modifica la propiedad AllowEdits ..........
+        Case "frmProyecto", "frmDoc", "frmEmpleadosFML", "frmApoyo", "frmRBDA", "frmRBDA_PreciosCab", "frmClientes", "frmPedidoEdit", "frmRBDA_Edit"
+        Case Else
+            frm.AllowEdits = Not intLock
+    End Select
+    
+    For Each ctl In frm.Controls
+        If InStr(ctl.Tag, strLock) > 0 Then
+            ctl.Locked = intLock
+            If EsLock2 = 2 Then ctl.Enabled = Not intLock
+            ctl.BackColor = lngColor
+            If ctl.ControlType = acSubform Then
+                'Si estamos en vista hoja de datos saltar'
+                On Error Resume Next                    ''
+                Set ob = Screen.ActiveDatasheet                ''
+                If Err = 0 Then GoTo SiguienteControl   ''
+                On Error GoTo Error_BloqueoFormulario     ''
+                '.........................................
+                ctl.Form.DatasheetBackColor = lngColor
+                ctl.Form.DatasheetGridlinesColor = lngColor2
+'                ctl.Form.AllowAdditions = Not intLock
+                ctl.Form.AllowDeletions = Not intLock
+                ctl.Form.AllowEdits = Not intLock
+            End If
+        End If
+        
+SiguienteControl:
+    Next ctl
+    'Si existe btnModi, hcerlo visible o no
+'    On Error Resume Next
+'    frm.Controls("btnModi").Visible = intLock
+'    On Error GoTo Error_BloqueoFormulario
+    '........................
+Salir_BloqueoFormulario:
+    Exit Sub
+Error_BloqueoFormulario:
+    Select Case Err
+        Case 438 ' el objeto no admite esta propiedad o método (el control no admite .backcolor)
+            If ctl.ControlType = acCommandButton Then ctl.Enabled = Not intLock
+            Resume Next
+            
+        Case 2455 '..........
+            Resume Next
+        Case Else
+            MsgBox "Error nº " & Err & " en BloqueoFormulario" & vbCrLf & Err.Description
+            Resume Salir_BloqueoFormulario
+            Resume Next
+    End Select
+End Sub
+
+Public Function BloqueoFormulario2()
+    Dim ctl As Control, lngColor As Long, lngColor2 As Long
+    Dim frm As Form, intLock As Integer
+    On Error GoTo Error_BloqueoFormulario2
+    Set frm = Screen.ActiveForm
+    For Each ctl In frm.Controls
+        If InStr(ctl.Tag, "LockUn") > 0 Then
+            intLock = Not ctl.Locked
+            Exit For
+        End If
+    Next ctl
+    Call BloqueoFormulario(frm, intLock)
+    On Error Resume Next
+    If Screen.ActiveForm.Name = "frmFincas" Then
+        If Err <> 0 Then Exit Function
+        If intLock = False And Forms("frmFincas").subfrmFincasYAfecciones.SourceObject = "subfrmFincasYAfeccionesBis" Then
+            Call Forms("frmFincas").btnModiAfec_Click
+        End If
+'        If intLock = True And Forms("frmFincas").subfrmFincasYAfecciones.SourceObject = "subfrmFincasYAfecciones" Then
+'            Call Forms("frmFincas").btnModiAfec_Click
+'        End If
+    End If
+Salir_BloqueoFormulario2:
+    Exit Function
+Error_BloqueoFormulario2:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en BloqueoFormulario2" & vbCrLf & Err.Description
+            Resume Salir_BloqueoFormulario2
+            Resume Next
+    End Select
+End Function
+
+Public Sub BuruForm(frm As Form)
+    On Error GoTo Error_BuruForm
+    Dim v As Variant, ctl As Control
+    v = Null 'DameValorParam("AplicacionColorEncabezadoForms")
+    If IsNumeric(v) Then
+        frm.Section(1).BackColor = CLng(v)
+    End If
+    v = Null 'DameValorParam("AplicacionColorEncabezadoLabels")
+    If IsNumeric(v) Then
+        For Each ctl In frm.Section(1).Controls
+            If InStr(ctl.Tag, "color") > 0 Then
+                ctl.ForeColor = v
+            End If
+        Next ctl
+    End If
+Salir_BuruForm:
+    Exit Sub
+Error_BuruForm:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en BuruForm" & vbCrLf & Err.Description
+            Resume Salir_BuruForm
+    End Select
+    
+End Sub
+
+
+Public Function Salir(Optional Save As AcCloseSave = acSavePrompt)
+    On Error GoTo HandleError
+    Dim frm As Form
+    Set frm = Screen.ActiveForm
+    If frm.Name = "frmMenu" Then
+        Dim intR As Integer
+        intR = MsgBox("¿Cerrar programa?", vbOKCancel + vbQuestion)
+        If intR = vbCancel Then Exit Function
+        'CopiaSeguridadAutoLins
+        DoCmd.Quit
+        Exit Function
+    End If
+    DoCmd.Close acForm, frm.Name, Save
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

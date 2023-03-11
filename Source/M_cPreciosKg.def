@@ -1,0 +1,217 @@
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = False
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+    
+    Private mlngIdPrecioKg As Long
+    Private mlngIdGrupoClientes As Long
+    Private mstrConcepto As String
+    Private mcurPrecioKg As Currency
+    Private msngOrden As Single
+    Private mrstRecordset As Recordset
+    Private mbooLoaded As Boolean
+        
+    Private msOrdMax As Single
+    Private msOrdMin As Single
+    Private mCallListBox As ListBox
+    
+    Public Property Get IdPrecioKg() As Long
+        IdPrecioKg = mlngIdPrecioKg
+    End Property
+    
+    Public Property Get IdGrupoClientes() As Long
+        IdGrupoClientes = mlngIdGrupoClientes
+    End Property
+    
+    Public Property Get GrupoClientes() As String
+        GrupoClientes = Nz(DLookup("GrupoClientes", "tbClientesGrupos", "IdGrupoClientes = " & mlngIdGrupoClientes), "?")
+    End Property
+    
+    Public Property Let IdGrupoClientes(rData As Long)
+        mlngIdGrupoClientes = rData
+    End Property
+    
+    Public Property Get Concepto() As String
+        Concepto = mstrConcepto
+    End Property
+    
+    Public Property Let Concepto(rData As String)
+        mstrConcepto = rData
+    End Property
+    
+    Public Property Get PrecioKg() As Currency
+        PrecioKg = mcurPrecioKg
+    End Property
+    
+    Public Property Let PrecioKg(rData As Currency)
+        mcurPrecioKg = rData
+    End Property
+    
+    Public Property Get Orden() As Single
+        Orden = msngOrden
+    End Property
+    
+    Public Property Let Orden(rData As Single)
+        msngOrden = rData
+    End Property
+    
+    Private Property Get Recordset() As Recordset
+        Set Recordset = mrstRecordset
+    End Property
+    
+    Private Property Set Recordset(rData As Recordset)
+        Set mrstRecordset = rData
+    End Property
+    
+    Private Sub Load()
+        With Recordset
+            mlngIdPrecioKg = Nz(.Fields("IdPrecioKg").Value)
+            Me.IdGrupoClientes = Nz(.Fields("IdGrupoClientes").Value)
+            Me.Concepto = Nz(.Fields("Concepto").Value)
+            Me.PrecioKg = Nz(.Fields("PrecioKg").Value)
+            Me.Orden = Nz(.Fields("Orden").Value)
+        End With
+        mbooLoaded = True
+    End Sub
+    
+    Public Sub Update()
+        With Recordset
+            If mbooLoaded = True Then
+                .Edit
+            Else
+                .AddNew
+            End If
+            mlngIdPrecioKg = Nz(.Fields("IdPrecioKg").Value)
+            .Fields("IdGrupoClientes").Value = Me.IdGrupoClientes
+            .Fields("Concepto").Value = NullIfEmptyString(Me.Concepto)
+            .Fields("PrecioKg").Value = Me.PrecioKg
+            .Fields("Orden").Value = Me.Orden
+            .Update
+        End With
+        mbooLoaded = True
+    End Sub
+    Public Sub AddNew()
+        mbooLoaded = False
+    End Sub
+    Public Function FindFirst(Optional Criteria As Variant) As Boolean
+        If IsMissing(Criteria) Then
+            Recordset.MoveFirst
+            FindFirst = Not Recordset.EOF
+        Else
+            Recordset.FindFirst Criteria
+            FindFirst = Not Recordset.NoMatch
+        End If
+        If FindFirst Then Load
+    End Function
+    Public Function FindLast(Optional Criteria As Variant) As Boolean
+        If IsMissing(Criteria) Then
+            Recordset.MoveLast
+            FindLast = Not Recordset.EOF
+        Else
+            Recordset.FindLast Criteria
+            FindLast = Not Recordset.NoMatch
+        End If
+        If FindLast Then Load
+    End Function
+    Private Sub Class_Initialize()
+        'Set Recordset = CurrentDb.OpenRecordset("tbPreciosKg", dbOpenDynaset)
+    End Sub
+    Private Sub Class_Terminate()
+        Recordset.Close
+        Set Recordset = Nothing
+    End Sub
+    
+    Public Sub IniRS(strSQL As String, Optional lstCall As ListBox)
+        Dim rs As Recordset
+        Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenDynaset)
+        If rs.EOF Then
+            msOrdMax = 0: msOrdMin = 0
+        Else
+            rs.MoveLast: msOrdMax = rs("Orden")
+            rs.MoveFirst: msOrdMin = rs("Orden")
+        End If
+        Set Recordset = rs
+        If Not lstCall Is Nothing Then Set mCallListBox = lstCall
+    End Sub
+    Function NullIfEmptyString(str As String) As Variant
+        Dim strTrimmed As String: strTrimmed = Trim(str)
+        If Len(strTrimmed) = 0 Then
+            NullIfEmptyString = Null
+        Else
+            NullIfEmptyString = strTrimmed
+        End If
+    End Function
+    
+Function NullIfZero(v) As Variant
+    If v = 0 Then
+        NullIfZero = Null
+    Else
+        NullIfZero = v
+    End If
+End Function
+
+Sub CargaForm(Optional strCaption As String = "")
+    On Error GoTo HandleError
+    Dim frm As Form
+    Load
+    If Not IsOpenForm("frmPreciosKgEdit") Then DoCmd.OpenForm ("frmPreciosKgEdit")
+        
+    Set frm = Forms("frmPreciosKgEdit")
+    Set frm.gcC = Me
+    If strCaption <> "" Then frm.Caption = strCaption
+    
+    frm("txtC") = mstrConcepto
+    frm("txtC").Visible = True
+    frm("txtC").SetFocus
+    frm("txtP") = mcurPrecioKg
+    
+    frm("btnNext").Enabled = msngOrden < msOrdMax
+    frm("btnPrevious").Enabled = msngOrden > msOrdMin
+    If Not mCallListBox Is Nothing Then mCallListBox = mlngIdPrecioKg
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Sub SalvaForm()
+    On Error GoTo HandleError
+    Dim frm As Form
+    Set frm = Forms("frmPreciosKgEdit")
+    mstrConcepto = Nz(frm("txtC"), "")
+    mcurPrecioKg = Nz(frm("txtP"), 0)
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+
+Public Sub Move(strNP As String, Optional iShift As Integer = 0)
+    On Error GoTo HandleError
+    SalvaForm
+    If strNP = "N" Then
+        If (iShift And acCtrlMask) <> 0 Then
+            Recordset.MoveLast
+        Else
+            Recordset.MoveNext
+        End If
+    Else
+        If (iShift And acCtrlMask) <> 0 Then
+            Recordset.MoveFirst
+        Else
+            Recordset.MovePrevious
+        End If
+    End If
+    CargaForm
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub

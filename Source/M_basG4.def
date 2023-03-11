@@ -1,0 +1,101 @@
+Option Compare Database
+Option Explicit
+
+Public Function DimePrendaTipoMedida(lngIdPrendaTipoMedida As Long, Optional iSinTipo As Integer = False) As String
+    On Error GoTo HandleError
+    Dim lngIdPrendaTipo As Long, strR As String
+    lngIdPrendaTipo = Nz(DLookup("IdPrendaTipo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), 0)
+    If iSinTipo = False Then strR = Nz(DLookup("TipoPrenda", "tbPrendasTipo", "IdPrendaTipo = " & lngIdPrendaTipo), "?") & " "
+    strR = strR & Nz(DLookup("Ancho", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?") & "x" & Nz(DLookup("Largo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?")
+    DimePrendaTipoMedida = strR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DimePrendaTipoMedidaRES(lngIdPrendaTipoMedida As Long, Optional iSinTipo As Integer = False) As String
+    On Error GoTo HandleError
+    Dim strSQL As String, strR As String, rs As Recordset
+    strSQL = "SELECT tbPrendasTipo.TipoPrenda, tbPrendasTipoMedida.Subtipo, tbPrendasTipoMedida.AnchoDesde, tbPrendasTipoMedida.AnchoHasta, tbPrendasTipoMedida.Largo" & _
+             " FROM tbPrendasTipo INNER JOIN tbPrendasTipoMedida ON tbPrendasTipo.Id = tbPrendasTipoMedida.IdPrendaTipo" & _
+             " WHERE tbPrendasTipoMedida.Id=" & lngIdPrendaTipoMedida
+    Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenSnapshot)
+    If iSinTipo = False Then strR = rs("TipoPrenda") & " "
+    If Nz(rs("SubTipo"), "") <> "" Then strR = strR & rs("SubTipo")
+    If Nz(rs("AnchoDesde"), "") <> "" Then strR = strR & rs("AnchoDesde")
+    If Nz(rs("AnchoHasta"), "") <> "" Then strR = strR & " a " & rs("AnchoHasta")
+    If Nz(rs("Largo"), "") <> "" Then strR = strR & "x" & rs("Largo")
+    DimePrendaTipoMedidaRES = strR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DimeCliente(lngIdCliente As Long) As String
+    On Error GoTo HandleError
+    Dim strR As String, iTipo As Integer
+    iTipo = Nz(DLookup("Tipo", "tbClientes", "IdCliente = " & lngIdCliente), 1)
+    If iTipo = 1 Then
+        strR = Nz(DLookup("RazonSocial", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
+    Else
+        strR = Nz(DLookup("[Nombre] & ' '& [Apellidos]", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
+    End If
+    DimeCliente = strR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Sub PonGruposCliente(lngIdCliente As Long)
+    On Error GoTo HandleError
+    Dim strR As String, strSQL As String, rs As Recordset
+    strSQL = "SELECT tbClientesGrupos.GrupoClientes" & _
+             " FROM tbClientesGrupos INNER JOIN tbCliente_Grupo ON tbClientesGrupos.IdGrupoClientes = tbCliente_Grupo.IdGrupoClientes" & _
+             " WHERE tbCliente_Grupo.IdCliente = " & lngIdCliente & _
+             " ORDER BY tbClientesGrupos.Orden;"
+    Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        strR = strR & rs(0) & ", "
+        rs.MoveNext
+    Wend
+    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 150)
+    strSQL = "UPDATE tbClientes SET Grupos = " & ConComillas(strR) & " WHERE IdCliente = " & lngIdCliente
+    CurrentDb.Execute strSQL, dbFailOnError
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+
+Public Function DimeContenidoPack(lngIdPackCab As Long) As String
+    On Error GoTo HandleError
+    Dim strSQL As String, rs As Recordset, strR As String
+    strSQL = "SELECT tbPrendas.IdPrendaTipoMedida, Count(tbPrendas.IdPrenda) AS Cantidad" & _
+             " FROM tbPrendas INNER JOIN tbPacksDet ON tbPrendas.IdPrenda = tbPacksDet.IdPrenda" & _
+             " WHERE tbPacksDet.IdPackCab = " & lngIdPackCab & _
+             " GROUP BY tbPacksDet.IdPackCab, tbPrendas.IdPrendaTipoMedida"
+    Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        strR = strR & rs("Cantidad") & " X " & DimePrendaTipoMedida(rs("IdPrendaTipoMedida")) & vbCrLf
+        rs.MoveNext
+    Wend
+    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 0)
+    DimeContenidoPack = strR
+
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

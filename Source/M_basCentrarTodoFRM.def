@@ -1,0 +1,202 @@
+Option Compare Database
+Option Explicit
+
+Public Sub CentrarTodoFRM(frm As Form, ctlCdrCentrar As Control, Optional intCentrarW As Integer = True, Optional intCentrarH As Integer = True, Optional strEstirarH_CtlName As String = "", Optional strListaOtrosControlesEstirar As String = ";")
+    On Error GoTo Error_CentrarTodoFrm
+    Dim ctl As Control, lngI As Long, lngD As Long, strListaControles As String
+    Dim i As Integer, lngTH As Long, j As Integer
+    Dim lngWW As Long
+    'DoCmd.Maximize
+    If Not intCentrarW Then GoTo CentrarH
+CentrarW:
+    lngWW = frm.WindowWidth
+    If lngWW < 0 Then lngWW = 32000
+    If lngWW <= ctlCdrCentrar.Width Then GoTo CentrarH
+    lngI = ctlCdrCentrar.Left
+    ctlCdrCentrar.Left = (lngWW - ctlCdrCentrar.Width) \ 2
+    lngD = ctlCdrCentrar.Left - lngI
+    If lngD < 0 Then lngD = 0
+    strListaControles = "[" & ctlCdrCentrar.Name & "]"
+    For Each ctl In frm.Controls
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then ' <> ctlCdrCentrar.Name Then
+            Select Case ctl.ControlType
+                Case acOptionGroup
+                    MueveControlGrupo ctl, lngD, 0, strListaControles
+                Case acTabCtl
+                    MueveControlGrupo ctl, 0, 0, strListaControles
+                    ctl.Left = ctl.Left + lngD
+            End Select
+        End If
+    Next ctl
+    For Each ctl In frm.Controls
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then ' <> ctlCdrCentrar.Name Then
+            ctl.Left = ctl.Left + lngD
+        End If
+    Next ctl
+CentrarH: 'Sólo en detalle
+    If Not intCentrarH Then GoTo EstirarH
+    lngTH = frm.WindowHeight
+    For i = 1 To 4
+        lngTH = lngTH - frm.Section(i).Height
+    Next i
+    If lngTH <= ctlCdrCentrar.Height Then GoTo Salir_CentrarTodoFrm
+    
+    lngI = ctlCdrCentrar.Top
+    If frm.Section(0).Height < lngTH Then frm.Section(0).Height = lngTH
+    ctlCdrCentrar.Top = (lngTH - ctlCdrCentrar.Height) \ 2
+    lngD = ctlCdrCentrar.Top - lngI
+    If lngD < 0 Then lngD = 0
+    strListaControles = "[" & ctlCdrCentrar.Name & "]"
+    For Each ctl In frm.Controls
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then ' <> ctlCdrCentrar.Name Then
+            Select Case ctl.ControlType
+                Case acOptionGroup
+                    MueveControlGrupo ctl, 0, lngD, strListaControles
+                Case acTabCtl
+                    MueveControlGrupo ctl, 0, 0, strListaControles
+                    ctl.Top = ctl.Top + lngD
+            End Select
+        End If
+    Next ctl
+    For Each ctl In frm.Controls
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then ' <> ctlCdrCentrar.Name Then
+            Select Case ctl.ControlType
+            End Select
+        End If
+    Next ctl
+    For Each ctl In frm.Section(0).Controls
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then ' <> ctlCdrCentrar.Name Then
+            ctl.Top = ctl.Top + lngD
+        End If
+    Next ctl
+EstirarH:
+    If strEstirarH_CtlName = "" Then GoTo Salir_CentrarTodoFrm
+    lngTH = frm.WindowHeight
+    For i = 1 To 4
+        lngTH = lngTH - frm.Section(i).Height
+    Next i
+    Dim ctlEstirarH  As Control
+    Set ctlEstirarH = frm.Controls(strEstirarH_CtlName)
+    If lngTH <= ctlEstirarH.Height - ctlEstirarH.Top Then GoTo Salir_CentrarTodoFrm
+    lngI = frm.Section(0).Height
+    If frm.Section(0).Height < lngTH Then frm.Section(0).Height = lngTH
+    lngD = lngTH - lngI
+    If lngD < 0 Then lngD = 0
+    For Each ctl In frm.Controls
+        If ctl.Top >= ctlEstirarH.Top + ctlEstirarH.Height Then
+            ctl.Top = ctl.Top + lngD
+        End If
+    Next ctl
+    ctlEstirarH.Height = ctlEstirarH.Height + lngD
+EstirarOtros:
+    j = 1
+    i = InStr(strListaOtrosControlesEstirar, ";")
+    While i > j
+        strEstirarH_CtlName = Mid(strListaOtrosControlesEstirar, j, i - j)
+        Set ctlEstirarH = frm.Controls(strEstirarH_CtlName)
+        ctlEstirarH.Height = ctlEstirarH.Height + lngD
+        j = i + 1
+        i = InStr(j, strListaOtrosControlesEstirar, ";")
+    Wend
+    
+Salir_CentrarTodoFrm:
+    Exit Sub
+Error_CentrarTodoFrm:
+    Select Case Err
+        Case 2462
+            Resume Next
+        Case Else
+            MsgBox "Error nº " & Err & " en CentrarTodoFrm" & vbCrLf & Err.Description
+            Resume Salir_CentrarTodoFrm
+    End Select
+End Sub
+
+Public Sub MueveControlGrupo(ctlGrupo As Control, lngDX As Long, lngDY As Long, ByRef strListaControles As String)
+    On Error GoTo Error_MueveControlGrupo
+    Dim lngW0 As Long, lngH0 As Long, ctl As Control, i As Integer
+    Dim strListaV As String, strCtl As String
+    lngW0 = ctlGrupo.Width
+    lngH0 = ctlGrupo.Height
+    ''''''''''''''
+    For Each ctl In ctlGrupo.Controls 'i = 0 To ctlGrupo.Controls.Count - 1
+        'Select Case ctlGrupo.Controls(i).ControlType
+        Select Case ctl.ControlType
+            Case acOptionGroup
+                'MueveControlGrupo ctlGrupo.Controls(i), lngDX, lngDY, strListaControles
+                MueveControlGrupo ctl, lngDX, lngDY, strListaControles
+            Case acTabCtl
+                'MueveControlGrupo ctlGrupo.Controls(i), 0, 0, strListaControles
+                MueveControlGrupo ctl, 0, 0, strListaControles
+                ctlGrupo.Top = ctlGrupo.Top + lngDY
+                ctlGrupo.Left = ctlGrupo.Left + lngDX
+            Case Else
+                'strListaV = strListaV & ctlGrupo.Controls(i).Name & vbCrLf
+                strListaV = strListaV & ctl.Name & vbCrLf
+        End Select
+    'Next i
+    Next ctl
+
+    
+    
+    'CargaControlesGrupo ctlGrupo, lngDX, lngDY, strListaV, strListaControles
+    'For i = 1 To ctlGrupo.Controls.Count
+    If ctlGrupo.ControlType = acTabCtl Then
+        ctlGrupo.Left = ctlGrupo.Left + lngDX
+        ctlGrupo.Top = ctlGrupo.Top + lngDY
+    End If
+    For i = 1 To LineasDeStr(strListaV)
+        strCtl = ExtraeLin(strListaV, i)
+        Set ctl = ctlGrupo.Controls(strCtl)
+        If InStr(strListaControles, "[" & ctl.Name & "]") = 0 Then
+            If ctlGrupo.ControlType = acOptionGroup Then
+                ctl.Left = ctl.Left + lngDX
+                ctl.Top = ctl.Top + lngDY
+            Else
+                ctl.Left = ctl.Left + 0
+                ctl.Top = ctl.Top + 0
+            End If
+            strListaControles = strListaControles & "[" & ctl.Name & "]"
+        End If
+    Next i
+    If ctlGrupo.ControlType = acOptionGroup Then
+        ctlGrupo.Left = ctlGrupo.Left + lngDX
+        ctlGrupo.Top = ctlGrupo.Top + lngDY
+    End If
+    ctlGrupo.Width = lngW0
+    ctlGrupo.Height = lngH0
+    strListaControles = strListaControles & "[" & ctlGrupo.Name & "]"
+    
+Salir_MueveControlGrupo:
+    Exit Sub
+Error_MueveControlGrupo:
+    Select Case Err
+        Case 2467
+            Resume Next
+        Case Else
+            MsgBox "Error nº " & Err & " en MueveControlGrupo" & vbCrLf & Err.Description
+            Resume Salir_MueveControlGrupo
+    End Select
+
+End Sub
+
+Public Sub CargaControlesGrupo(ctlGrupo As Control, lngDX As Long, lngDY As Long, ByRef strListaV As String, ByRef strListaH As String)
+    On Error GoTo Error_CargaControlesGrupo
+    Dim i As Integer
+    For i = 0 To ctlGrupo.Controls.Count - 1
+        Select Case ctlGrupo.Controls(i).ControlType
+            Case acOptionGroup, acTabCtl
+                MueveControlGrupo ctlGrupo.Controls(i), lngDX, lngDY, strListaH
+            Case Else
+                strListaV = strListaV & ctlGrupo.Controls(i).Name & vbCrLf
+        End Select
+    Next i
+Salir_CargaControlesGrupo:
+    Exit Sub
+Error_CargaControlesGrupo:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en CargaControlesGrupo" & vbCrLf & Err.Description
+            Resume Salir_CargaControlesGrupo
+    End Select
+
+End Sub

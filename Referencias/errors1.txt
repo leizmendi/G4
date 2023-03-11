@@ -1,0 +1,4 @@
+absw_3nak detectó un error al importar el objeto 'frmAyudon'.
+
+Error en la línea 1.
+Objeto creado con una versión de absw_3nak anterior a la que está utilizando.

@@ -1,0 +1,4 @@
+absw_3nak detectó un error al importar el objeto 'frmAyudaAncha'.
+
+Error en la línea 487.
+Esperado: Fin de archivo. Encontrado: Version.

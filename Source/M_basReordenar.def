@@ -1,0 +1,87 @@
+Option Compare Database
+Option Explicit
+
+Public Sub Reordenar(strFrom As String, strCampo As String, _
+                     Optional strWhere As String = "*", _
+                     Optional intPaso As Integer = 1, _
+                     Optional intIni As Long = 0, _
+                     Optional strOrderBy As String = "", _
+                     Optional strSELECT As String = "*", _
+                     Optional strColumnaExcel As String = "")
+    On Error GoTo Error_Reordenar
+    Dim rs As Recordset, strSQL As String, i As Long
+    
+    strSQL = "SELECT " & strSELECT & " FROM " & strFrom
+    If strWhere <> "*" Then
+        strSQL = strSQL & " WHERE " & strWhere
+    End If
+    If strOrderBy = "" Then strOrderBy = strCampo
+    strSQL = strSQL & " ORDER BY " & strOrderBy
+    Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenDynaset)
+    i = intIni
+    While Not rs.EOF
+        i = i + intPaso
+        rs.Edit
+        rs(strCampo) = i
+        If strColumnaExcel <> "" Then rs(strColumnaExcel) = ColumnaExcel(i)
+        rs.Update
+        rs.MoveNext
+        Wend
+    intIni = i
+Salir_Reordenar:
+    Exit Sub
+Error_Reordenar:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en Reordenar" & vbCrLf & Err.Description
+            Resume Salir_Reordenar
+    End Select
+End Sub
+
+Function ColumnaExcel(lCol As Long) As String
+    On Error GoTo HandleError
+    Dim iDividendo As Long, iCociente As Long, iResto As Long, strR As String
+    Const A_to_Z As String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    iDividendo = lCol
+Bucle:
+    If iDividendo = 0 Then GoTo Resultado
+    iResto = (iDividendo - 1) Mod 26
+    strR = Mid(A_to_Z, iResto + 1, 1) & strR
+    iCociente = (iDividendo - 1) \ 26
+    iDividendo = iCociente
+    GoTo Bucle
+Resultado:
+    ColumnaExcel = strR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Function ColumnaExcel_to_Long(strCol As String) As Long
+    On Error GoTo HandleError
+    Dim sC As String, i As Integer, lR As Long, j As Integer, iPos As Integer
+    Const A_to_Z As String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    i = Len(strCol)
+Bucle:
+    If i = 0 Then GoTo Resultado
+    j = j + 1
+    iPos = InStr(A_to_Z, Mid(strCol, i, 1))
+    If iPos = 0 Then
+        MsgBox "Columna no correcta: no puede contener la letra: " & UCase(Mid(strCol, i, 1)), vbExclamation
+        GoTo HandleExit
+    End If
+    lR = lR + 26 ^ (j - 1) * iPos
+    i = i - 1
+    GoTo Bucle
+Resultado:
+    ColumnaExcel_to_Long = lR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

@@ -1,0 +1,201 @@
+Option Compare Database
+Option Explicit
+
+Public Function ComprobarCampos(Optional strMDB As String = "Current")
+    Dim fld As DAO.Field, strMSG As String, strMsg2 As String, tdf As TableDef
+    Dim strSQL As String, rs As Recordset, db As Database
+    Dim db2 As Database, tdf2 As TableDef, fld2 As DAO.Field, strMDB2 As String
+    On Error GoTo Error_ComprobarCampos
+    Set rs = CurrentDb.OpenRecordset("SELECT * FROM sysComprobarCampos ORDER By ID", dbOpenSnapshot)
+    If strMDB = "Current" Then
+        Set db = CurrentDb
+    Else
+        Set db = OpenDatabase(strMDB)
+    End If
+    While Not rs.EOF
+        If strMDB <> "Current" Then
+            On Error Resume Next
+            Set tdf = db.TableDefs(rs("NombreTabla"))
+            If Err <> 0 Then GoTo SiguienteCampo
+            On Error GoTo Error_ComprobarCampos
+        End If
+        On Error Resume Next
+        Set fld = db.TableDefs(rs("NombreTabla")).Fields(rs("NombreCampo"))
+        If Err <> 0 Then '
+            On Error GoTo Error_ComprobarCampos
+            strMsg2 = ""
+            If Añadir_Campo(rs("NombreTabla"), rs("NombreCampo"), rs("TipoCampo"), rs("Tamaño"), strMsg2, strMDB) = True Then
+            
+            End If
+            strMSG = strMSG & strMsg2 & vbCrLf
+        End If
+        If fld.Type = dbText Then
+            If fld.Size < rs("Tamaño") Then
+                If DLookup("DirectorioActual", "1myConexionTablas", "NombreTabla = '" & rs("NombreTabla") & "'") = True Then
+                    strMDB2 = DirectorioDe(CurrentDb.Name)
+                Else
+                    strMDB2 = DLookup("DirectorioDeConexion", "1myConexionTablas", "NombreTabla = '" & rs("NombreTabla") & "'")
+                End If
+                strMDB2 = strMDB2 & DLookup("FicheroDeConexion", "1myConexionTablas", "NombreTabla = '" & rs("NombreTabla") & "'")
+                Set db2 = OpenDatabase(strMDB2, True)
+                            '----------------------------------------------------------------
+                            'Set tdf2 = db2.TableDefs(rs("NombreTabla"))
+                            'Set fld2 = tdf2.Fields(rs("NombreCampo"))
+                            'SetProperty fld2, "Size", dbText, rs("Tamaño")
+                            'Da error 3219 operacion no válida (?)---------------------------
+                strSQL = "ALTER TABLE " & rs("NombreTabla")
+                strSQL = strSQL & " ALTER COLUMN " & rs("NombreCampo") & " TEXT(" & rs("Tamaño") & ")"
+                db2.Execute strSQL, dbFailOnError
+                'MsgBox "Se debe aumentar el tamaño del campo " & UCase(rs("NombreCampo")) & " a " & rs("Tamaño") & " en la tabla " _
+                        & UCase(rs("NombreTabla")) & " de la base de datos: " & db2.Name
+                        
+            End If
+        End If
+SiguienteCampo:
+        rs.MoveNext
+    Wend
+    If strMSG <> "" Then MsgBox strMSG
+Salir_ComprobarCampos:
+    Exit Function
+Error_ComprobarCampos:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ComprobarCampos" & vbCrLf & Err.Description
+            Resume Salir_ComprobarCampos
+    End Select
+
+End Function
+
+Public Function Añadir_Campo(strTabla As String, strNombreCampo As String, intTipo As Integer, Optional intSize As Integer = 0, Optional ByRef strMensaje As String, Optional strMDB As String = "Current", Optional strPropiedadXML As String = "", Optional strConnect As String = "") As Integer
+'Genera nuevos campos en "& strtabla &"
+    On Error GoTo Error_Añadir_Campo
+    
+    Dim db As Database, ws As Workspace
+    Dim tdf As TableDef, fld As DAO.Field, ind As Index
+    Dim i As Integer
+    On Error GoTo Error_Añadir_Campo
+    If strMDB = "current" Then
+        If DLookup("DirectorioActual", "1myConexionTablas", "NombreTabla = '" & strTabla & "'") = True Then
+            strMDB = DirectorioDe(CurrentDb.Name)
+        Else
+            strMDB = DLookup("DirectorioDeConexion", "1myConexionTablas", "NombreTabla = '" & strTabla & "'")
+        End If
+        strMDB = strMDB & DLookup("FicheroDeConexion", "1myConexionTablas", "NombreTabla = '" & strTabla & "'")
+    End If
+    strConnect = Nz(DLookup("PrefijoConexion", "1myConexionTablas", "NombreTabla = '" & strTabla & "'"), "")
+    i = InStr(strConnect, ";DATABASE")
+    If i > 1 Then
+        strConnect = Left(strConnect, i - 1)
+        i = InStr(strConnect, ";pwd=")
+        If i > 1 Then strConnect = Mid(strConnect, i)
+    End If
+    Set ws = DBEngine.Workspaces(0)
+    Set db = ws.OpenDatabase(strMDB, True, False, strConnect)
+    
+    Set tdf = db.TableDefs(strTabla)
+    If intSize = 0 Then
+        Set fld = tdf.CreateField(strNombreCampo, intTipo)
+    Else
+        Set fld = tdf.CreateField(strNombreCampo, intTipo, intSize)
+    End If
+    Dim strPropName As String, intPropType As Integer, vValor
+    strPropName = Nz(DimeXML(strPropiedadXML, "Propiedad"), "")
+    tdf.Fields.Append fld
+    If strPropName <> "" Then
+        intPropType = Nz(DimeXML(strPropiedadXML, "Tipo"), 0)
+        vValor = Nz(DimeXML(strPropiedadXML, "Valor"), "")
+        SetProperty fld, strPropName, intPropType, vValor
+    End If
+    
+    Set fld = Nothing
+    Set tdf = Nothing
+    db.Close
+    Set db = Nothing
+    
+    Set ws = Nothing
+    
+    strMensaje = "Se añadió el campo " & strNombreCampo & " en la tabla " & strTabla & " en " & strMDB
+    Añadir_Campo = True
+Salir_Añadir_Campo:
+    Exit Function
+Error_Añadir_Campo:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en Añadir_Campo" & vbCrLf & Err.Description
+            strMensaje = "NO se pudo añadir el campo " & strNombreCampo & " en la tabla " & strTabla & " en " & strMDB
+
+            On Error Resume Next
+            db.Close
+            Añadir_Campo = False
+            Resume Salir_Añadir_Campo
+    End Select
+End Function
+
+Public Function Quitar_Campo(strTabla As String, strNombreCampo As String, Optional ByRef strMensaje As String, Optional strMDB As String = "Current") As Integer
+'Genera nuevos campos en "& strtabla &"
+    On Error GoTo Error_Quitar_Campo
+    
+    Dim db As Database, ws As Workspace
+    Dim tdf As TableDef, fld As DAO.Field, ind As Index
+    On Error GoTo Error_Quitar_Campo
+    If strMDB = "current" Then
+        If DLookup("DirectorioActual", "1myConexionTablas", "NombreTabla = '" & strTabla & "'") = True Then
+            strMDB = DirectorioDe(CurrentDb.Name)
+        Else
+            strMDB = DLookup("DirectorioDeConexion", "1myConexionTablas", "NombreTabla = '" & strTabla & "'")
+        End If
+        strMDB = strMDB & DLookup("FicheroDeConexion", "1myConexionTablas", "NombreTabla = '" & strTabla & "'")
+    End If
+    Set ws = DBEngine.Workspaces(0)
+    Set db = ws.OpenDatabase(strMDB)
+    
+    Set tdf = db.TableDefs(strTabla)
+    tdf.Fields.Delete strNombreCampo
+    Set tdf = Nothing
+    strMensaje = "Se eliminó el campo " & strNombreCampo & " en la tabla " & strTabla & " en " & strMDB
+    Quitar_Campo = True
+Salir_Quitar_Campo:
+    Exit Function
+Error_Quitar_Campo:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en Quitar_Campo" & vbCrLf & Err.Description
+            strMensaje = "NO se pudo añadir el campo " & strNombreCampo & " en la tabla " & strTabla & " en " & strMDB
+            Quitar_Campo = False
+            Resume Salir_Quitar_Campo
+    End Select
+End Function
+
+
+Sub SetProperty(fldTemp As DAO.Field, strName As String, intType As Integer, valor As Variant)
+
+   Dim prpNew As Property
+   Dim errLoop As Error
+
+   ' Attempt to set the specified property.
+   On Error GoTo Err_Property
+   fldTemp.Properties(strName) = valor
+   On Error GoTo 0
+Salir_SetProperty:
+   Exit Sub
+
+Err_Property:
+
+   ' Error 3270 means that the property was not found.
+   If DBEngine.Errors(0).Number = 3270 Then
+      ' Create property, set its value, and append it to the
+      ' Properties collection.
+      Set prpNew = fldTemp.CreateProperty(strName, intType, valor)
+      fldTemp.Properties.Append prpNew
+      Resume Next
+   Else
+      ' If different error has occurred, display message.
+      For Each errLoop In DBEngine.Errors
+         MsgBox "Error number: " & errLoop.Number & vbCr & _
+            errLoop.Description
+            Resume Salir_SetProperty
+      Next errLoop
+      End
+   End If
+
+End Sub
