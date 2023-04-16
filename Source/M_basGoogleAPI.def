@@ -1,0 +1,110 @@
+Option Compare Database
+Option Explicit
+
+Enum GoogleAPI_Dato
+    CodPostal
+    FormatAddress
+    Coordenadas
+End Enum
+    
+
+
+Function GoogleAPI(strDireccion As String, iDato As GoogleAPI_Dato _
+                    , Optional strLanguage As String = "es") As String
+    On Error GoTo HandleError
+    Dim strUrl As String
+    Dim hReq As Object
+    Dim json As Object
+    Dim salida As Object, Comp As Object
+    Dim strDir As String, strCP As String, strFormatDir As String, strR As String, strFA As String, sLat As String, sLng As String, sCoords As String
+    strDir = Replace(strDireccion, " ", "+")
+    strDir = SinTildes(strDir)
+    'Dim ws As Worksheet: Set ws = ActiveSheet
+    
+    'strUrl = "https://restcountries.eu/rest/v2/all"
+    'strUrl = "https://restcountries.eu/rest/v2/name/zu"
+    'strUrl = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=Aibar%20Navarra%20Spain&inputtype=textquery&fields=photos,formatted_address,name,rating,opening_hours,geometry&key=AIzaSyBn8iDxAfYZ_JdcjRt5REQedQD-GhlerlQ"
+    strUrl = "https://maps.googleapis.com/maps/api/geocode/json?address=" & strDir & "&key=AIzaSyBn8iDxAfYZ_JdcjRt5REQedQD-GhlerlQ&language=" & strLanguage
+
+    Set hReq = CreateObject("MSXML2.XMLHTTP")
+    With hReq
+        .Open "GET", strUrl, False
+        .Send
+    End With
+    'debug.Print hReq.responseText
+    Set json = ParseJson(hReq.responseText)
+    
+    For Each salida In json("results")
+        For Each Comp In salida("address_components")
+            If Comp("types")(1) = "postal_code" Then
+                strCP = Comp("long_name")
+                If InStr(strR, strCP) = 0 Then strR = strR & strCP & vbCrLf
+            End If
+            strFA = salida("formatted_address")
+            If InStr(strFormatDir, strFA) = 0 Then strFormatDir = strFormatDir & strFA & vbCrLf
+            sLat = salida("geometry")("location")("lat")
+            sLng = salida("geometry")("location")("lng")
+            If InStr(sCoords, sLat & "|" & sLng) = 0 Then sCoords = sCoords & "|" & sLat & "|" & sLng
+            'Debug.Print salida("formatted_address")
+        Next
+    Next
+    If Len(strR) > 2 Then strR = Left(strR, Len(strR) - 2)
+    If Len(strFormatDir) > 2 Then strFormatDir = Left(strFormatDir, Len(strFormatDir) - 2)
+    If Len(sCoords) > 1 Then sCoords = Mid(sCoords, 2)
+    Select Case iDato
+        Case GoogleAPI_Dato.CodPostal: GoogleAPI = strR
+        Case GoogleAPI_Dato.FormatAddress: GoogleAPI = strFormatDir
+        Case GoogleAPI_Dato.Coordenadas: GoogleAPI = sCoords
+    End Select
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Function SinTildes(strTexto As String) As String
+
+  strTexto = LCase(strTexto)
+  strTexto = Replace(strTexto, "á", "a"): strTexto = Replace(strTexto, "à", "a")
+  strTexto = Replace(strTexto, "é", "e"): strTexto = Replace(strTexto, "è", "e")
+  strTexto = Replace(strTexto, "í", "i"): strTexto = Replace(strTexto, "ì", "i")
+  strTexto = Replace(strTexto, "ó", "o"): strTexto = Replace(strTexto, "ò", "o")
+  strTexto = Replace(strTexto, "ú", "u"): strTexto = Replace(strTexto, "ù", "u")
+  strTexto = Replace(strTexto, "ü", "u"): strTexto = Replace(strTexto, "ñ", "n")
+  strTexto = Replace(strTexto, "º", "_"): strTexto = Replace(strTexto, "ª", "_")
+  SinTildes = strTexto
+
+End Function            ' SinTildes
+
+Public Function DameCoordenadas(sDireccion As String _
+                    , Optional ByRef dLat As Double _
+                    , Optional ByRef dLng As Double _
+                    , Optional VerEnMaps012 As Integer = 1)
+    Dim sCoords As String, vCoords As Variant
+    Dim i As Integer, sRS As String
+    sCoords = GoogleAPI(sDireccion, Coordenadas)
+    vCoords = Split(sCoords, "|")
+    If UBound(vCoords) > 1 Then
+        For i = 0 To UBound(vCoords) - 1 Step 2
+            sRS = sRS & ";" & vCoords(i) & "|" & vCoords(i + 1)
+        Next i
+        sRS = Mid(sRS, 2)
+        CurrentDb.Execute "UPDATE sysBusquedas SET strSQL=" & ConComillas(sRS, True) & " WHERE CodBusqueda = 'SelOP'", dbFailOnError
+        sCoords = Nz(BuscaAyuda("SelOP", , 1, , , False), "")
+        vCoords = Split(sCoords, "|")
+        dLat = vCoords(0)
+        dLng = vCoords(1)
+        If VerEnMaps012 = 1 Then VerEnGoogleMaps dLat, dLng
+    Else
+        dLat = vCoords(0)
+        dLng = vCoords(1)
+        If VerEnMaps012 = 2 Then VerEnGoogleMaps dLat, dLng
+    End If
+    Debug.Print "Lat: " & dLat
+    Debug.Print "Lng: " & dLng
+End Function
+
+Public Function VerEnGoogleMaps(dLat As Double, dLng As Double)
+    fHandleFile "https://www.google.es/maps?q=" & ComaPunto(dLat) & "," & ComaPunto(dLng) & "&t=h", WIN_NORMAL
+End Function

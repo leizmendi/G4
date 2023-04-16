@@ -403,12 +403,13 @@ HandleError:
     Resume HandleExit
 End Function
 
-Public Function ConComillas(strCad As String) As String
+Public Function ConComillas(strCad As String _
+                 , Optional bComillaSimple As Boolean = False) As String
 ' Devuelve la misma cadena delimitada con comillas--> de Lorenzo---> "Lorenzo"
     On Error GoTo Error_ConComillas
-    Dim strComilla As String
-    strComilla = Chr(34)
-    ConComillas = strComilla & strCad & strComilla
+    Dim sComilla As String
+    sComilla = IIf(Not bComillaSimple, """", "'")
+    ConComillas = sComilla & strCad & sComilla
 Salir_ConComillas:
     Exit Function
 Error_ConComillas:
@@ -418,4 +419,8 @@ Error_ConComillas:
             Resume Salir_ConComillas
     End Select
 
+End Function
+
+Public Function ComaPunto(vNum As Variant) As String
+    ComaPunto = Replace(CStr(vNum), ",", ".")
 End Function

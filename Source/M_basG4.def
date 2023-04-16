@@ -1,11 +1,44 @@
 Option Compare Database
 Option Explicit
 
-Public Function DimePrendaTipoMedida(lngIdPrendaTipoMedida As Long, Optional iSinTipo As Integer = False) As String
+Enum PrendaEstado
+    Alta
+    Lavado
+    Pack
+    Cliente
+    Baja
+End Enum
+
+Public Function PEstado_str(iPrendaEstado As PrendaEstado) As String
+    Select Case iPrendaEstado
+        Case Alta: PEstado_str = "A"
+        Case Lavado: PEstado_str = "L"
+        Case Pack: PEstado_str = "P"
+        Case Cliente: PEstado_str = "C"
+        Case Baja: PEstado_str = "B"
+        Case Else: PEstado_str = "?"
+    End Select
+End Function
+
+Public Function PEstado_num(sDestino As String) As PrendaEstado
+    Select Case sDestino
+        Case "A": PEstado_num = Alta
+        Case "L": PEstado_num = Lavado
+        Case "P": PEstado_num = Pack
+        Case "C": PEstado_num = Cliente
+        Case "B": PEstado_num = Baja
+        Case Else: PEstado_num = -1
+    End Select
+End Function
+
+
+Public Function DimePrendaTipoMedida(lngIdPrendaTipoMedida As Long _
+                          , Optional iSinTipo As Integer = False _
+                          , Optional bDimeCodigo As Boolean = False) As String
     On Error GoTo HandleError
     Dim lngIdPrendaTipo As Long, strR As String
     lngIdPrendaTipo = Nz(DLookup("IdPrendaTipo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), 0)
-    If iSinTipo = False Then strR = Nz(DLookup("TipoPrenda", "tbPrendasTipo", "IdPrendaTipo = " & lngIdPrendaTipo), "?") & " "
+    If iSinTipo = False Then strR = Nz(DLookup(IIf(Not bDimeCodigo, "TipoPrenda", "CodTipo"), "tbPrendasTipo", "IdPrendaTipo = " & lngIdPrendaTipo), "?") & " "
     strR = strR & Nz(DLookup("Ancho", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?") & "x" & Nz(DLookup("Largo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?")
     DimePrendaTipoMedida = strR
     
@@ -87,10 +120,10 @@ Public Function DimeContenidoPack(lngIdPackCab As Long) As String
              " GROUP BY tbPacksDet.IdPackCab, tbPrendas.IdPrendaTipoMedida"
     Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenSnapshot)
     While Not rs.EOF
-        strR = strR & rs("Cantidad") & " X " & DimePrendaTipoMedida(rs("IdPrendaTipoMedida")) & vbCrLf
+        strR = strR & " + " & rs("Cantidad") & " " & DimePrendaTipoMedida(rs("IdPrendaTipoMedida"), , True)
         rs.MoveNext
     Wend
-    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 0)
+    If Len(strR) > 3 Then strR = Mid(strR, 4)
     DimeContenidoPack = strR
 
 HandleExit:
@@ -98,4 +131,85 @@ HandleExit:
 HandleError:
     MsgBox Err.Description
     Resume HandleExit
+End Function
+
+Public Sub My2ListGrupoClientes(lngIdCliente As Long)
+    On Error GoTo HandleError
+    Dim strSQL As String, strSqlAdd As String, strSqlQuit As String, sDisponibles As String, sAsignadas As String
+    strSQL = "SELECT tbCliente_Grupo.Id, tbClientesGrupos.GrupoClientes, tbCliente_Grupo.IdGrupoClientes"
+    strSQL = strSQL & " FROM tbClientesGrupos INNER JOIN tbCliente_Grupo ON tbClientesGrupos.IdGrupoClientes = tbCliente_Grupo.IdGrupoClientes"
+    strSQL = strSQL & " WHERE tbCliente_Grupo.IdCliente=" & lngIdCliente
+    'CurrentDb.QueryDefs("qryAsignadas").SQL = strSQL
+    sAsignadas = strSQL
+    strSQL = "SELECT tbClientesGrupos.IdGrupoClientes, tbClientesGrupos.GrupoClientes"
+    strSQL = strSQL & " FROM tbClientesGrupos LEFT JOIN qryAsignadas ON tbClientesGrupos.IdGrupoClientes = qryAsignadas.IdGrupoClientes"
+    strSQL = strSQL & " WHERE (((qryAsignadas.IdGrupoClientes) Is Null))"
+    strSQL = strSQL & " ORDER BY tbClientesGrupos.Orden;"
+    'CurrentDb.QueryDefs("qryDisponibles").SQL = strSQL
+    sDisponibles = strSQL
+    strSQL = "INSERT INTO tbCliente_Grupo(IdGrupoClientes, IdCliente)"
+    strSQL = strSQL & " SELECT <<ItemData>> as IdGrupo, " & lngIdCliente & " as IdEmp"
+    strSqlAdd = strSQL
+    strSQL = "DELETE * FROM tbCliente_Grupo"
+    strSQL = strSQL & " WHERE Id = <<ItemData>>"
+    strSqlQuit = strSQL
+    MyInput2List sDisponibles, sAsignadas, strSqlAdd, strSqlQuit, "Grupos del Cliente", , , "Grupos de " & DimeCliente(lngIdCliente)
+    PonGruposCliente lngIdCliente
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Public Function AddPrenda2Pack(lIdPrenda As Long, lIdPackCab As Long) As Boolean
+    On Error GoTo HandleError
+    Dim iEstado As PrendaEstado, sSQL As String
+    iEstado = PEstado_num(Nz(DLookup("Estado", "tbPrendas", "IdPrenda = " & lIdPrenda), "A"))
+    Select Case iEstado
+        Case PrendaEstado.Pack
+            MsgBox "La prenda se encuentra ya empaquetada, no se puede añadir de nuevo a un pack", vbExclamation
+            GoTo HandleExit
+        Case PrendaEstado.Baja
+            MsgBox "La prenda está dada de baja, no se puede añadir de nuevo a un pack", vbExclamation
+            GoTo HandleExit
+        Case Cliente
+            SetPrendaEstado lIdPrenda, Lavado
+    End Select
+    sSQL = "INSERT INTO tbPacksDet (IdPackCab, IdPrenda)" & _
+           " VALUES (" & lIdPackCab & ", " & lIdPrenda & ")"
+    CurrentDb.Execute sSQL, dbFailOnError
+    SetPrendaEstado lIdPrenda, Pack, , lIdPackCab
+    AddPrenda2Pack = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+    
+End Function
+
+Public Function SetPrendaEstado(lIdPrenda As Long _
+                        , iEstado As PrendaEstado _
+                        , Optional dtNow As Date = 0 _
+                        , Optional lIdDestino As Long = 0) As Boolean
+    On Error GoTo HandleError
+    Dim sSQL As String
+    If dtNow = 0 Then dtNow = Now()
+    sSQL = "UPDATE tbPrendas SET Estado = " & ConComillas(PEstado_str(iEstado), True)
+    If iEstado = Lavado Then sSQL = sSQL & ", CantLavados = CantLavados + 1"
+    sSQL = sSQL & " WHERE IdPrenda = " & lIdPrenda
+    CurrentDb.Execute sSQL, dbFailOnError
+    sSQL = "INSERT INTO tbPrendaHis(IdPrenda, Fecha, Estado, IdDestino)" & _
+            " VALUES(" & lIdPrenda & "," & ComaPunto(CDbl(dtNow)) & "," & ConComillas(PEstado_str(iEstado), True) & "," & IIf(lIdDestino <> 0, lIdDestino, "Null") & ")"
+    CurrentDb.Execute sSQL, dbFailOnError
+    SetPrendaEstado = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume 'HandleExit
+    
+
 End Function
