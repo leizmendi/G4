@@ -2,7 +2,7 @@ Option Compare Database
 Option Explicit
 
 Public Function ComprobarCampos(Optional strMDB As String = "Current")
-    Dim fld As DAO.Field, strMSG As String, strMsg2 As String, tdf As TableDef
+    Dim fld As DAO.Field, strMsg As String, strMsg2 As String, tdf As TableDef
     Dim strSQL As String, rs As Recordset, db As Database
     Dim db2 As Database, tdf2 As TableDef, fld2 As DAO.Field, strMDB2 As String
     On Error GoTo Error_ComprobarCampos
@@ -27,7 +27,7 @@ Public Function ComprobarCampos(Optional strMDB As String = "Current")
             If Añadir_Campo(rs("NombreTabla"), rs("NombreCampo"), rs("TipoCampo"), rs("Tamaño"), strMsg2, strMDB) = True Then
             
             End If
-            strMSG = strMSG & strMsg2 & vbCrLf
+            strMsg = strMsg & strMsg2 & vbCrLf
         End If
         If fld.Type = dbText Then
             If fld.Size < rs("Tamaño") Then
@@ -54,7 +54,7 @@ Public Function ComprobarCampos(Optional strMDB As String = "Current")
 SiguienteCampo:
         rs.MoveNext
     Wend
-    If strMSG <> "" Then MsgBox strMSG
+    If strMsg <> "" Then MsgBox strMsg
 Salir_ComprobarCampos:
     Exit Function
 Error_ComprobarCampos:

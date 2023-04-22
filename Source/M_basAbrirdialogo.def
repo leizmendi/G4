@@ -1,0 +1,73 @@
+Option Compare Database
+Option Explicit
+
+Public Function AbrirDialogo(Optional intOpen As Integer = True _
+                        , Optional strFilter As String = "" _
+                        , Optional lngFilterIndex As Long = 0 _
+                        , Optional strFile As String = "" _
+                        , Optional strDlgTitle As String = "" _
+                        , Optional strOpenTitle As String = "" _
+                        , Optional strInitialDir As String = "" _
+                        , Optional intConfirmReplace As Integer = True _
+                        , Optional intNoChangeDir As Integer = False _
+                        , Optional intAllowReadOnly As Integer = False _
+                        , Optional intAllowMultiSelect As Integer = False _
+                        , Optional intDirectoriesOnly As Integer = False _
+                        , Optional intInitializeView As Integer = False _
+                        , Optional intView As Integer = 0 _
+                        ) As String
+    ' Test the common dialog.
+    
+    ' From Access 97 Developer's Handbook
+    ' by Litwin, Getz, and Gilbert (Sybex)
+    ' Copyright 1997.  All rights reserved.
+    
+    Dim lngFlags As Long
+    Dim gfni As adh_accOfficeGetFileNameInfo
+    
+    
+    On Error GoTo HandleErrors
+    gfni.hwndOwner = Screen.ActiveForm.Hwnd
+    AbrirDialogo = ""
+    If intConfirmReplace Then
+        lngFlags = lngFlags Or adhcGfniConfirmReplace
+    End If
+    If intNoChangeDir Then
+        lngFlags = lngFlags Or adhcGfniNoChangeDir
+    End If
+    If intAllowReadOnly Then
+        lngFlags = lngFlags Or adhcGfniAllowReadOnly
+    End If
+    If intAllowMultiSelect Then
+        lngFlags = lngFlags Or adhcGfniAllowMultiSelect
+    End If
+    If intDirectoriesOnly Then
+        lngFlags = lngFlags Or adhcGfniDirectoryOnly
+    End If
+    If intInitializeView Then
+        lngFlags = lngFlags Or adhcGfniInitializeView
+        gfni.lngView = intView
+        'Details;0;Preview;1;Properties;2;List;3
+    End If
+    With gfni
+        .lngFlags = lngFlags
+        ' Make sure not to pass in Null values. adhOfficeGetFile
+        ' doesn't like that, and often GPFs.
+        .strFilter = strFilter & ""
+        .lngFilterIndex = lngFilterIndex
+        .strFile = strFile & ""
+        .strDlgTitle = strDlgTitle & ""
+        .strOpenTitle = strOpenTitle & ""
+        .strInitialDir = strInitialDir & ""
+    End With
+    If adhOfficeGetFileName(gfni, intOpen) = adhcAccErrSuccess Then
+        AbrirDialogo = Trim(gfni.strFile)
+    End If
+    Screen.ActiveForm.SetFocus
+ExitHere:
+    Exit Function
+
+HandleErrors:
+    MsgBox "Error: " & Err.Description & " (" & Err.Number & ")"
+    Resume ExitHere
+End Function
