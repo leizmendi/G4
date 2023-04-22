@@ -4,7 +4,8 @@ Option Explicit
 Enum PrendaEstado
     Alta
     Lavado
-    Pack
+    Planchado
+    Empaquetado
     Cliente
     Baja
 End Enum
@@ -13,7 +14,8 @@ Public Function PEstado_str(iPrendaEstado As PrendaEstado) As String
     Select Case iPrendaEstado
         Case Alta: PEstado_str = "A"
         Case Lavado: PEstado_str = "L"
-        Case Pack: PEstado_str = "P"
+        Case Planchado: PEstado_str = "P"
+        Case Empaquetado: PEstado_str = "E"
         Case Cliente: PEstado_str = "C"
         Case Baja: PEstado_str = "B"
         Case Else: PEstado_str = "?"
@@ -24,7 +26,8 @@ Public Function PEstado_num(sDestino As String) As PrendaEstado
     Select Case sDestino
         Case "A": PEstado_num = Alta
         Case "L": PEstado_num = Lavado
-        Case "P": PEstado_num = Pack
+        Case "P": PEstado_num = Planchado
+        Case "E": PEstado_num = Empaquetado
         Case "C": PEstado_num = Cliente
         Case "B": PEstado_num = Baja
         Case Else: PEstado_num = -1
@@ -168,7 +171,7 @@ Public Function AddPrenda2Pack(lIdPrenda As Long, lIdPackCab As Long) As Boolean
     Dim iEstado As PrendaEstado, sSQL As String
     iEstado = PEstado_num(Nz(DLookup("Estado", "tbPrendas", "IdPrenda = " & lIdPrenda), "A"))
     Select Case iEstado
-        Case PrendaEstado.Pack
+        Case PrendaEstado.Empaquetado
             MsgBox "La prenda se encuentra ya empaquetada, no se puede añadir de nuevo a un pack", vbExclamation
             GoTo HandleExit
         Case PrendaEstado.Baja
@@ -180,7 +183,7 @@ Public Function AddPrenda2Pack(lIdPrenda As Long, lIdPackCab As Long) As Boolean
     sSQL = "INSERT INTO tbPacksDet (IdPackCab, IdPrenda)" & _
            " VALUES (" & lIdPackCab & ", " & lIdPrenda & ")"
     CurrentDb.Execute sSQL, dbFailOnError
-    SetPrendaEstado lIdPrenda, Pack, , lIdPackCab
+    SetPrendaEstado lIdPrenda, Empaquetado, , lIdPackCab
     AddPrenda2Pack = True
 HandleExit:
     Exit Function
@@ -209,7 +212,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
     
 
 End Function
