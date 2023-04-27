@@ -196,12 +196,25 @@ End Function
 Public Function SetPrendaEstado(lIdPrenda As Long _
                         , iEstado As PrendaEstado _
                         , Optional dtNow As Date = 0 _
-                        , Optional lIdDestino As Long = 0) As Boolean
+                        , Optional lIdDestino As Long = 0 _
+                        , Optional bNoSumarLavado As Boolean = False _
+                        , Optional bRestarLavado As Boolean = False) As Boolean
     On Error GoTo HandleError
-    Dim sSQL As String
+    Dim sSQL As String, sSQL2 As String, iEstadoActual As PrendaEstado
     If dtNow = 0 Then dtNow = Now()
+    iEstadoActual = PEstado_num(Nz(DLookup("Estado", "tbPrendas", "IdPrenda = " & lIdPrenda), "A"))
     sSQL = "UPDATE tbPrendas SET Estado = " & ConComillas(PEstado_str(iEstado), True)
-    If iEstado = Lavado Then sSQL = sSQL & ", CantLavados = CantLavados + 1"
+    If (iEstado = Lavado Or iEstado = Planchado) And Not bNoSumarLavado Then
+        sSQL = sSQL & ", CantLavados = CantLavados + 1"
+        If iEstado = Planchado And iEstadoActual <> Lavado Then
+            'Cuando se pasa a estado planchado se debe pasar primero por Lavado
+            sSQL2 = "INSERT INTO tbPrendaHis(IdPrenda, Fecha, Estado)" & _
+                    " VALUES(" & lIdPrenda & "," & ComaPunto(CDbl(dtNow)) & "," & ConComillas(PEstado_str(PrendaEstado.Lavado), True) & ")"
+            CurrentDb.Execute sSQL2, dbFailOnError
+        End If
+    ElseIf bRestarLavado Then
+        sSQL = sSQL & ", CantLavados = CantLavados - 1"
+    End If
     sSQL = sSQL & " WHERE IdPrenda = " & lIdPrenda
     CurrentDb.Execute sSQL, dbFailOnError
     sSQL = "INSERT INTO tbPrendaHis(IdPrenda, Fecha, Estado, IdDestino)" & _
@@ -232,4 +245,20 @@ End Function
 
 Public Function GetCarpetaQR() As String
     GetCarpetaQR = Nz(GetParam("CarpetaImagenesQR", False), "")
+End Function
+
+Public Function GetCarpetaSonidos() As String
+    GetCarpetaSonidos = Nz(GetParam("CarpetaSonidos", False), "")
+End Function
+
+Public Function DetallePack(lIdPackCab As Long) As String
+    'Devuelve string de IdPrendas incuidas en Pack, separadas por |
+    Dim rs As Recordset, sR As String
+    Set rs = CurrentDb.OpenRecordset("SELECT IdPrenda FROM tbPacksDet WHERE IdPackCab = " & lIdPackCab & " ORDER BY IdPrenda", dbOpenSnapshot)
+    sR = "|"
+    While Not rs.EOF
+        sR = sR & rs("IdPrenda") & "|"
+        rs.MoveNext
+    Wend
+    DetallePack = sR
 End Function

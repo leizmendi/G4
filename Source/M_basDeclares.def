@@ -393,7 +393,7 @@ Sub adhSplitPath(pstrPath As String, pstrDrive As String, _
     pstrExt = adhTrimNull(strExt)
 End Sub
 
-Function adhFullPath(strFileName As String) As String
+Function adhFullPath(strFilename As String) As String
 
     ' A wrapper function for the adh_accFullPath() function.
     '
@@ -421,7 +421,7 @@ Function adhFullPath(strFileName As String) As String
     Dim strBuffer As String * adhcSP_MAXPATH
     Dim intRetval As Integer
 
-    intRetval = adh_accFullPath(strFileName, strBuffer, adhcSP_MAXPATH)
+    intRetval = adh_accFullPath(strFilename, strBuffer, adhcSP_MAXPATH)
     adhFullPath = Left(strBuffer, intRetval)
 End Function
 
