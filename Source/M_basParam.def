@@ -193,7 +193,7 @@ Error_DameVP:
     End Select
 End Function
 
-Public Function GetParam(strNP As String, Optional intUser As Integer = True)
+Public Function GetParam(strNP As String, Optional intUser As Integer = False)
     On Error GoTo Error_GetParam
     Dim strParam As String, vVP
     strParam = strNP & IIf(intUser, "_" & GetUserName(), "")

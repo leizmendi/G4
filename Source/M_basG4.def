@@ -262,3 +262,7 @@ Public Function DetallePack(lIdPackCab As Long) As String
     Wend
     DetallePack = sR
 End Function
+
+Public Function DimeView() As AcView
+    DimeView = IIf(Nz(GetParam("ProduccionImprimirTodoEnVistaPreviaSN"), False), acViewPreview, acViewNormal)
+End Function

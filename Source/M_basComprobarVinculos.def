@@ -20,7 +20,9 @@ Public Function ComprobarVinculos()
         strF = Nz(DLookup("FicheroDeconexion", "1myConexionTablas", "NombreTabla = 'tbClientes'"), "G4_dat.accdb")
         CurrentDb.Execute "UPDATE 1myConexionTablas SET DirectorioDeConexion = " & ConComillas(strC) & _
                           " WHERE FicheroDeConexion = '" & strF & "'", dbFailOnError
-        ReconectarTablasYaVinculadas strF
+        'ReconectarTablasYaVinculadas strF
+'+SYS
+        ReconectarTablasYaVinculadas
             
 Finish:
         strSQL = "UPDATE 1myConexionTablas SET [1myConexionTablas].DirectorioDeConexion = '" & strCurDir & "'"
