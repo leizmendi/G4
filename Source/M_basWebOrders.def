@@ -1,0 +1,140 @@
+Option Compare Database
+Option Explicit
+
+
+Public Function OrderRevisar(lIdOrder As Long, Optional lIdPedidoCab As Long = 0) As Boolean
+    'En caso de que lIdPedidoCab sea 0 cmprueba si existe un pedido del mismo cliente y fecha y pregunta si se quiere relacionar
+    'En otro caso también comprueba si se corresponde con el Cliente
+    'Si no se encuentra el pedido lo añade a la tabla tbPedidosCab y tbPedidosDet, comprueba que existan Productos y Cliente
+    On Error GoTo HandleError
+    Dim lIdCli As Long, lIdCust As Long, iR As Integer, dtFOrder As Date, lNumPedido As Long, sSQL As String
+    lIdCust = Nz(DLookup("customer_id", "jos_eshop_orders", "id = " & lIdOrder), 0)
+    If lIdCust = 0 Then
+        MsgBox "No se encontró customer_id en tabla de pedidos web", vbExclamation
+        GoTo HandleExit
+    End If
+VerIdCli:
+    lIdCli = Nz(DLookup("IdCliente", "tbClientes", "id_C = " & lIdCust), 0)
+    If lIdCli = 0 Then
+        iR = MsgBox("No se encontró cliente enlazado para cliente del pedido, ¿enlazar ahora?", vbOKCancel + vbQuestion)
+        If iR = vbCancel Then GoTo HandleExit
+        If CustomerEnlazar(lIdCust) = True Then GoTo VerIdCli
+        GoTo HandleExit
+    End If
+    If lIdPedidoCab = 0 Then
+        lIdPedidoCab = Nz(DLookup("IdPedidoCab", "tbPedidosCab", "idOrder = " & lIdOrder), 0)
+        If lIdPedidoCab <> 0 Then
+            MsgBox "El pedido de la web id = " & lIdOrder & " ya se encuentra en la tabla de pedidos, asignado al pedido nº: " & DLookup("NumPedido", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab), vbInformation
+            GoTo HandleExit
+        End If
+        dtFOrder = CDate(DLookup("created_date", "jos_eshop_orders", "id = " & lIdOrder))
+        lIdPedidoCab = Nz(DLookup("IdPedidoCab", "tbPedidosCab", "IdCliente = " & lIdCli _
+                                                            & " AND FechaRegistro = " & CLng(DateValue(dtFOrder)) _
+                                                            & " AND Nz(IdOrder,0)=0"), 0)
+        If lIdPedidoCab <> 0 Then
+            lNumPedido = DLookup("NumPedido", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab)
+            iR = MsgBox("Se encontró el pedido: Nº " & lNumPedido & " de mismo cliente y fecha, pendiente de enlazar con un pedido web." _
+                    & "?Quiere enlazarlo con este?", vbYesNo)
+            If iR = vbYes Then
+                sSQL = "UPDATE tbPedidosCab SET IdOrder = " & lIdOrder & " WHERe IdPedidoCab = " & lIdPedidoCab
+                CurrentDb.Execute sSQL, dbFailOnError
+                MsgBox "Se enlazó pedido Nº: " & lNumPedido & " Con IdOrder: " & lIdOrder, vbInformation
+                GoTo HandleExit
+            End If
+            iR = MsgBox("¿Importar a un nuevo pedido del cliente " & DimeCliente(lIdCli) & "?", vbOKCancel + vbQuestion)
+            If iR = vbCancel Then GoTo HandleExit
+        End If
+        OrderImportar lIdOrder, lIdCli
+    Else
+        If lIdCli <> DLookup("IdCliente", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab) Then
+            lNumPedido = DLookup("NumPedido", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab)
+            MsgBox "No coinciden Cliente de Pedido en la Web y en G4" & vbCrLf & "Pedido Nº: " & lNumPedido, vbExclamation
+            GoTo HandleExit
+        End If
+        Dim iQPP As Integer, iQPO As Integer
+        iQPP = DLookup("QPrendas", "qPedidos", "IdPedidoCab = " & lIdPedidoCab)
+        iQPO = DLookup("Prendas", "qOrders", "id= " & lIdOrder)
+        If iQPP <> iQPO Then
+            lNumPedido = DLookup("NumPedido", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab)
+            MsgBox "Pedido " & lNumPedido & ": No coinciden la cantidad de prendas en G4 y Web: " & iQPP & " < -- > " & iQPO, vbExclamation
+        Else
+            MsgBox "Pedido OK", vbInformation
+        End If
+    End If
+    OrderRevisar = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Public Function OrderImportar(lIdOrder As Long, lIdCli As Long) As Boolean
+    On Error GoTo HandleError
+    'En caso de que lIdPedidoCab sea 0 cmprueba si existe un pedido del mismo cliente y fecha y pregunta si se quiere relacionar
+    'En otro caso también comprueba si se corresponde con el Cliente
+    'Si no se encuentra el pedido lo añade a la tabla tbPedidosCab y tbPedidosDet, comprueba que existan Productos y Cliente
+    'MsgBox "OrderImportar(" & lIdOrder & ", " & lIdCli & ")", vbInformation
+    Dim sSQL As String, rsO As Recordset, rsOP As Recordset, rsPD As Recordset
+    Dim lIdPCab As Long, lNumPedido As Long, i As Integer, k As Integer, sMsg As String, sNotas As String, lIdPTM As Long
+    Set rsO = CurrentDb.OpenRecordset("SELECT * FROM jos_eshop_orders WHERE id = " & lIdOrder, dbOpenSnapshot)
+    If rsO.EOF Then
+        MsgBox "No se encontró Order id = " & lIdOrder, vbExclamation
+        GoTo HandleExit
+    End If
+    lNumPedido = Nz(DMax("NumPedido", "tbPedidosCab"), 0) + 1
+    sNotas = rsO("email") & " - " & rsO("telephone") _
+            & vbCrLf & Trim(rsO("payment_address_1") & " " & rsO("payment_address_2")) & " " & rsO("payment_city")
+    sNotas = Replace(Replace(sNotas, """", ""), "'", "")
+    sSQL = "INSERT INTO tbPedidosCab(IdCliente, NumPedido, FechaRegistro, Notas, idOrder)" _
+        & " VALUES(" & lIdCli & ", " & lNumPedido & ", " & CLng(DateValue(rsO("created_date"))) & ", " & ConComillas(sNotas, True) & ", " & lIdOrder & ")"
+    CurrentDb.Execute sSQL, dbFailOnError
+    lIdPCab = Nz(DLookup("IdPedidoCab", "tbPedidosCab", "NumPedido = " & lNumPedido), 0)
+    If lIdPCab = 0 Then
+        MsgBox "No se encontró el registro de tbPedidosCab creado", vbExclamation
+        GoTo HandleExit
+    End If
+    Set rsOP = CurrentDb.OpenRecordset("SELECT * FROM jos_eshop_orderproducts WHERE order_id = " & lIdOrder, dbOpenSnapshot)
+    Set rsPD = CurrentDb.OpenRecordset("tbPedidosDet", dbOpenDynaset, dbAppendOnly)
+    While Not rsOP.EOF
+        lIdPTM = Nz(DLookup("IdPrendaTipoMedida", "tbPrendasTipoMedida", "Id_P = " & rsOP("product_id")), 0)
+        If lIdPTM = 0 Then
+            MsgBox "No se encontró Prenda enlazada al producto " & rsOP("Product_name") & ", no se ñadirá al pedido", vbExclamation
+            k = k + 1
+        Else
+            rsPD.AddNew
+            rsPD("IdPedidoCab") = lIdPCab
+            rsPD("IdPrendaTipoMedida") = lIdPTM
+            rsPD("Cantidad") = rsOP("quantity")
+            rsPD.Update
+            i = i + 1
+        End If
+        rsOP.MoveNext
+    Wend
+    sMsg = "Se añadió pedido Nº " & lNumPedido & " con " & i & " línea/s"
+    If k > 0 Then sMsg = sMsg & vbCrLf & k & " líneas no se pudieron añadir"
+    MsgBox sMsg, vbInformation
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function CustomerEnlazar(lcustomer_id As Long) As Boolean
+    On Error GoTo HandleError
+    Dim sCusto As String, lIdCli As Long, sSQL As String
+    sCusto = DLookup("firstname & ' ' & lastname", "jos_eshop_customers", "customer_id = " & lcustomer_id)
+    lIdCli = Nz(DLookup("IdCliente", "tbClientes", "id_C = " & lcustomer_id), 0)
+    lIdCli = Nz(buscaayuda("CLI10", lIdCli, 1), 0)
+    If lIdCli = 0 Then GoTo HandleExit
+    sSQL = "UPDATE tbClientes SET id_C = " & lcustomer_id & " WHERE IdCliente = " & lIdCli
+    CurrentDb.Execute sSQL, dbFailOnError
+    CustomerEnlazar = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
