@@ -77,18 +77,19 @@ Public Function OrderImportar(lIdOrder As Long, lIdCli As Long) As Boolean
     'Si no se encuentra el pedido lo añade a la tabla tbPedidosCab y tbPedidosDet, comprueba que existan Productos y Cliente
     'MsgBox "OrderImportar(" & lIdOrder & ", " & lIdCli & ")", vbInformation
     Dim sSQL As String, rsO As Recordset, rsOP As Recordset, rsPD As Recordset
-    Dim lIdPCab As Long, lNumPedido As Long, i As Integer, k As Integer, sMsg As String, sNotas As String, lIdPTM As Long
+    Dim lIdPCab As Long, lNumPedido As Long, i As Integer, k As Integer, sMsg As String, sNotas As String, lIdPTM As Long, sEntrega As String
     Set rsO = CurrentDb.OpenRecordset("SELECT * FROM jos_eshop_orders WHERE id = " & lIdOrder, dbOpenSnapshot)
     If rsO.EOF Then
         MsgBox "No se encontró Order id = " & lIdOrder, vbExclamation
         GoTo HandleExit
     End If
     lNumPedido = Nz(DMax("NumPedido", "tbPedidosCab"), 0) + 1
-    sNotas = rsO("email") & " - " & rsO("telephone") _
+    sEntrega = rsO("email") & " - " & rsO("telephone") _
             & vbCrLf & Trim(rsO("payment_address_1") & " " & rsO("payment_address_2")) & " " & rsO("payment_city")
-    sNotas = Replace(Replace(sNotas, """", ""), "'", "")
-    sSQL = "INSERT INTO tbPedidosCab(IdCliente, NumPedido, FechaRegistro, Notas, idOrder)" _
-        & " VALUES(" & lIdCli & ", " & lNumPedido & ", " & CLng(DateValue(rsO("created_date"))) & ", " & ConComillas(sNotas, True) & ", " & lIdOrder & ")"
+    sEntrega = Replace(Replace(sEntrega, """", ""), "'", "")
+    sNotas = Nz(rsO("comment"), "")
+    sSQL = "INSERT INTO tbPedidosCab(IdCliente, NumPedido, FechaRegistro, Notas, DireccionEntrega, idOrder)" _
+        & " VALUES(" & lIdCli & ", " & lNumPedido & ", " & CLng(DateValue(rsO("created_date"))) & ", " & ConComillas(sNotas, True) & ", " & ConComillas(sEntrega, True) & ", " & lIdOrder & ")"
     CurrentDb.Execute sSQL, dbFailOnError
     lIdPCab = Nz(DLookup("IdPedidoCab", "tbPedidosCab", "NumPedido = " & lNumPedido), 0)
     If lIdPCab = 0 Then
@@ -119,7 +120,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume HandleExit
+    Resume 'HandleExit
 End Function
 
 Public Function CustomerEnlazar(lcustomer_id As Long) As Boolean
