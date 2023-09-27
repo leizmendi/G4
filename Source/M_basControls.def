@@ -1,0 +1,74 @@
+Option Compare Database
+Option Explicit
+
+Public Function Column_List(lst As ListBox, X_mouse As Long) As Integer
+    On Error GoTo HandleError
+    Dim lWidth As Long, iColumnCount As Integer, sColumnWidths As String, vColWidth As Variant, lColW As Long, lTotW As Long
+    Dim i As Integer, iR As Integer, lColW_r As Long
+    iR = -1
+    lWidth = lst.Width
+    iColumnCount = lst.ColumnCount
+    sColumnWidths = lst.ColumnWidths
+    vColWidth = Split(sColumnWidths, ";")
+    If iColumnCount > UBound(vColWidth) + 1 Then
+        For i = 0 To UBound(vColWidth)
+            lTotW = lTotW + vColWidth(i)
+        Next i
+        lColW_r = (lWidth - lTotW) / (iColumnCount - (UBound(vColWidth) + 1))
+    End If
+    lTotW = 0
+    For i = 0 To iColumnCount - 1
+        If i <= UBound(vColWidth) Then
+            lColW = vColWidth(i)
+        Else
+            lColW = lColW_r
+        End If
+        lTotW = lTotW + lColW
+        If lTotW > X_mouse Then
+            iR = i
+            Exit For
+        End If
+    Next i
+    Column_List = iR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function Column_Cdr(cdr As Rectangle, X_mouse As Long) As Integer
+    On Error GoTo HandleError
+    Dim lWidth As Long, iColumnCount As Integer, sColumnWidths As String, vColumnWidths As Variant, vColWidth As Variant, lColW As Long, lTotW As Long
+    Dim i As Integer, iR As Integer, lColW_r As Long
+    iR = -1
+    lWidth = cdr.Width
+    sColumnWidths = cdr.Tag
+    vColWidth = Split(sColumnWidths, ";")
+    iColumnCount = UBound(vColWidth)
+    If iColumnCount > UBound(vColWidth) + 1 Then
+        For i = 0 To UBound(vColWidth)
+            lTotW = lTotW + vColWidth(i)
+        Next i
+        lColW_r = (lWidth - lTotW) / (iColumnCount - (UBound(vColWidth) + 1))
+    End If
+    lTotW = 0
+    For i = 0 To iColumnCount
+        If i <= UBound(vColWidth) Then
+            lColW = vColWidth(i)
+        Else
+            lColW = lColW_r
+        End If
+        lTotW = lTotW + lColW
+        If lTotW > X_mouse Then
+            iR = i
+            Exit For
+        End If
+    Next i
+    Column_Cdr = iR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

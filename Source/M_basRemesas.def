@@ -1,0 +1,418 @@
+Option Compare Database
+Option Explicit
+
+    'Dim rsRemesa As Recordset
+Dim aux_libre1 As String, aux_libre2 As String, aux_libre3 As String, nceros As String
+Dim aux_codreg, aux_coddat, aux_nif, aux_sufijo As String
+Dim aux_codref, aux_nombre, aux_entidad, aux_oficina As String
+Dim aux_digcont, aux_numcuenta, aux_importe, aux_concepto As String
+Dim aux_numrecibos As String
+
+
+Public Function GenerarRemesaSEPA1914(lngIdEmision As Long _
+                                    , Optional bMensaje As Boolean = True) As Boolean
+    On Error GoTo Error_GenerarRemesaSEPA1914
+    ' Variables SEPA1914
+    Dim FechaSeleccionadaRemesa As Date, FechaSeleccionadaCargo As Date
+      
+    ' Validaciones
+    If Not IsDate(DLookup("FechaEmision", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision)) Then
+        MsgBox "La fecha de emisión no es válida"
+        Exit Function
+    End If
+    FechaSeleccionadaRemesa = DLookup("FechaEmision", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision)
+    If Not IsDate(DLookup("FechaCargo", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision)) Then
+        MsgBox "La fecha de Cargo no es válida"
+        Exit Function
+    End If
+    FechaSeleccionadaCargo = DLookup("FechaCargo", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision)
+    
+    'If Nz(DLookup("IdentificacionFichero", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision), "") = "" Then
+    '    MsgBox "La identificación del fichero no puede estar vacía"
+    '    Exit Sub
+    'End If
+
+    ' SEPA1914
+'    FechaSeleccionadaRemesa = Format(Me.FechaEmision, "dd/mm/yyyy")
+'    FechaSeleccionadaCargo = Format(Me.FechaCargo, "dd/mm/yyyy")
+    
+    
+    
+    Dim x As Integer
+    Dim cod_error As Integer
+    Dim v As Variant
+    Dim intNL As Integer
+
+
+    Dim strFile As String
+    'strFile = Nz(DameValorParam("PuestoCarpetaRemesas"), "")
+    'If strFile = "" Then strFile = DirectorioDe(CurrentDb.Name)
+    'If Right(strFile, 1) <> "\" Then strFile = strFile & "\"
+    strFile = strFile & "REM_" & Format(lngIdEmision, "0000") & ".TXT"
+    strFile = DimeFileSaveAs(strFile, "Indique carpeta y nombre de fichero para guardar remesa")
+    If strFile = "" Then Exit Function
+    'PonValorParam "PuestoCarpetaRemesas", DirectorioDe(strFile)
+    
+        Open strFile For Random As #1 Len = 602
+    
+    'DoCmd.SetWarnings True
+  
+    DoCmd.Hourglass True
+    
+    ' SEPA1914
+    'If IsNull(Me.IdentificacionFichero) Then Me.IdentificacionFichero = Me.IdReciboEmision
+    CrearCabeceraPresentador "", FechaSeleccionadaRemesa, FechaSeleccionadaCargo, CStr(lngIdEmision)    'Me.IdentificacionFichero
+    CrearCabeceraAcreedorFechaCobro "", FechaSeleccionadaCargo
+    CrearRegistroIndividualObligatorio lngIdEmision
+    CrearRegistroTotalesAcreedorFechaCobro
+    CrearRegistroTotalesAcreeedor
+    CrearRegistroTotalGeneral
+
+    Close #1
+    DoCmd.Hourglass False
+
+    MsgBox "Proceso concluido, el fichero de remesa generado es: " & vbCrLf & strFile, vbInformation
+    Dim sSQL As String
+    sSQL = "UPDATE tbRecibosEmisiones SET RemesaGenerada = True" _
+        & ", CuentaAbono = " & ConComillas(DimeCuentaAbonoOrdenante, True) _
+        & ", IdentificacionFichero = " & ConComillas("REM_" & Format(lngIdEmision, "0000") & ".TXT", True) _
+        & " WHERE IdReciboEmision = " & lngIdEmision
+    CurrentDb.Execute sSQL, dbFailOnError
+    'Call Form_Current
+  'dba.Close
+    GenerarRemesaSEPA1914 = True
+    
+exit_confeccionarSEPA1914:
+    If bMensaje Then
+        If GenerarRemesaSEPA1914 = True Then
+            MsgBox "Se generó fichero de remesa: " & strFile, vbInformation
+        Else
+            MsgBox "No se pudo generar fichero de remesa", vbExclamation
+        End If
+    End If
+            
+    Exit Function
+
+Error_GenerarRemesaSEPA1914:
+    'DoCmd.SetWarnings False
+    Close #1
+    'DoCmd.SetWarnings True
+    cod_error = Err
+    Error_en_disco cod_error
+    Resume exit_confeccionarSEPA1914
+
+End Function
+
+
+Sub Error_en_disco(codigo As Integer)
+    Dim x As Integer
+    DoCmd.Hourglass False
+    Select Case codigo
+        Case 61
+            MsgBox Error$(61)
+        Case 68
+            MsgBox Error$(68)
+        Case 71
+            DoCmd.SetWarnings False
+            'rsRemesa.Close
+            x = MsgBox("El disco no está listo", , "Recibos")
+            DoCmd.SetWarnings True
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description
+     End Select
+End Sub
+
+
+
+Sub EscribirRegistroPresentador(lngIdEmision As Long)
+
+Dim aux_d, aux_m, aux_a As String
+
+ 'asignación de los valores a escribir en el diskette
+ aux_codreg = "51"
+ aux_coddat = "80"
+ aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")
+ aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+'Fecha de concepción del soporte
+ 
+ aux_codref = Format(DLookup("FechaEmision", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision), "DDMMYY")
+ 
+ aux_libre1 = Space(6)
+ 'relleno por la dcha con blancos
+ aux_nombre = Trim(DLookup("NOMBRE_ORDENANTE", "Ordenante"))
+ dcha_blancos aux_nombre, 40
+
+ aux_libre2 = Space(20)
+ aux_entidad = DLookup("ENTIDAD", "Ordenante")
+ aux_oficina = DLookup("OFICINA", "Ordenante")
+ aux_importe = Trim(nceros) & aux_importe
+ aux_libre3 = Space(66)
+
+    Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_libre1; aux_nombre; aux_libre2; aux_entidad; aux_oficina; aux_libre3
+    'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_libre1; aux_nombre; aux_libre2; aux_entidad; aux_oficina; aux_libre3
+  
+  
+
+End Sub
+
+
+Sub EscribirRegistroOrdenante(lngIdEmision As Long)
+
+Dim aux_procedimiento As String
+Dim aux_d As String, aux_m As String, aux_a As String
+Dim aux_d1 As String, aux_m1 As String, aux_a1 As String
+Dim aux_fecha
+
+ 
+ 'asignación de los valores a escribir en el diskette
+ aux_codreg = "53"
+ aux_coddat = "80"
+' aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")' Ya están asignados
+' aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+
+'Fecha de confección del soporte
+ aux_codref = Format(DLookup("FechaEmision", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision), "DDMMYY")
+'Recojo la fecha de cargo
+ aux_fecha = Format(DLookup("FechaCargo", "tbRecibosEmisiones", "IdReciboEmision = " & lngIdEmision), "DDMMYY")
+
+'relleno por la dcha con blancos
+ aux_nombre = Trim(GetParam("OrdenanteNombre"))
+ dcha_blancos aux_nombre, 40
+
+ aux_entidad = GetParam("OrdenanteEntidad")
+ aux_oficina = GetParam("OrdenanteOficina")
+ aux_digcont = GetParam("OrdenanteDigitosControl")
+ aux_numcuenta = GetParam("OrdenanteNumeroCuenta")
+ aux_libre1 = Space(8)
+ aux_procedimiento = "01"
+ aux_libre2 = Space(64)
+ 
+ Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; Trim(aux_codref); Trim(aux_fecha); aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; ; aux_libre1; aux_procedimiento; aux_libre2
+ 'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; Trim(aux_codref); Trim(aux_fecha); aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; ; aux_libre1; aux_procedimiento; aux_libre2
+ 
+End Sub
+
+
+'Sub EscribirRegistroIndividualObligatorio()
+' 'asignación de los valores a escribir en el diskette
+'    aux_codreg = "56"
+'    aux_coddat = "80"
+''    aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")
+''    aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+'
+''relleno por la izqda con ceros
+'    aux_codref = Trim(rsRemesa("CODREF"))
+'    izda_ceros aux_codref, aux_codref, 12
+'
+''relleno por la dcha con blancos
+'    aux_nombre = Trim(UCase$(rsRemesa("Nombre")))
+'    dcha_blancos aux_nombre, 40
+'
+'    aux_entidad = Trim(rsRemesa("Entidad"))
+'    If Len(Trim(aux_entidad)) < 4 Then
+'         izda_ceros aux_entidad, aux_entidad, 4
+'    End If
+'
+'    aux_oficina = Trim(rsRemesa("OFICINA"))
+'    If Len(Trim(aux_oficina)) < 4 Then
+'         izda_ceros aux_oficina, aux_oficina, 4
+'    End If
+'
+'    aux_digcont = Trim(rsRemesa("DIGCONT"))
+'    If Len(Trim(aux_digcont)) < 2 Then
+'         izda_ceros aux_digcont, aux_digcont, 2
+'    End If
+'
+'    aux_numcuenta = Trim(rsRemesa("NUMCUENTA"))
+'    If Len(Trim(aux_numcuenta)) = 10 Then
+'        aux_numcuenta = Trim(aux_numcuenta)
+'    Else
+'        izda_ceros aux_numcuenta, aux_numcuenta, 10
+'    End If
+'
+'    aux_importe = Replace(Format(rsRemesa("IMPORTE"), "0.00"), ",", "")
+''    aux_importe = Trim(rsRemesa("IMPORTE"))
+'    izda_ceros aux_importe, aux_importe, 10
+'
+'    aux_numrecibos = Trim(CStr(rsRemesa("NUMRECIBO")))
+'    izda_ceros aux_numrecibos, aux_numrecibos, 6
+'
+'    aux_libre1 = Space(10)
+'    aux_concepto = Trim(UCase$(CStr(rsRemesa("Concepto"))))
+'    dcha_blancos aux_concepto, 40
+'
+'    aux_libre2 = Space(8)
+'
+' Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_numrecibos; aux_libre1; aux_concepto; aux_libre2
+' 'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_numrecibos; aux_libre1; aux_concepto; aux_libre2
+'End Sub
+
+'Public Sub EscribirRegistrosIndividualesOpcionales(lngNumRecibo As Long, intNumLin As Integer) 'NEW
+'    Dim strSQL As String
+'    Dim rs As Recordset
+'    Dim aux_Linea As String
+'    On Error GoTo Error_EscribirRegistrosIndividualesOpcionales
+'    strSQL = "SELECT tbRecibosDet.Linea, tbRecibosDet.Concepto, tbRecibosDet.Importe"
+'    'strSQL = "SELECT tbRecibosDet.Linea, tbRecibosDet.Concepto, tbRecibosDet.Importe, tbAlumnos.TitularCuenta, tbAlumnos.Direccion, tbAlumnos.Poblacion, tbAlumnos.CP"
+'    strSQL = strSQL & " FROM tbRecibosDet"
+'    'strSQL = strSQL & " FROM (tbRecibos INNER JOIN tbRecibosDet ON tbRecibos.NUMRECIBO = tbRecibosDet.NumRecibo) INNER JOIN tbAlumnos ON tbRecibos.IdAlumno = tbAlumnos.IdAlumno"
+'    strSQL = strSQL & " WHERE (((tbRecibosDet.NUMRECIBO) = " & lngNumRecibo & "))"
+'    strSQL = strSQL & " ORDER BY tbRecibosDet.Linea;"
+'    Set rs = CurrentDb.OpenRecordset(strSQL)
+'    If rs.EOF Then Exit Sub ' si no hay detalle, fuera
+'    Dim i As Integer, j As Integer, str3Conceptos As String * 120
+'    Dim k As Long
+'    i = 0
+'    ' para grabar registro opcional final (direcciones, etc)******************************
+'    'guardo datos de titularcuenta... en strReg antes de llegar a rs.eof
+''    Dim strReg As String * 163
+''    Mid(strReg, 1, 2) = "06"
+''    Mid(strReg, 3, 2) = "86"
+''    Mid(strReg, 5, 9) = DLookup("NIF_ORDENANTE", "Ordenante")
+''    Mid(strReg, 14, 3) = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+''    Mid(strReg, 17, 12) = "  " & Format(lngNumRecibo, "0000000000") '10 ceros
+''    Mid(strReg, 29, 40) = AjustaIzda(rs("TitularCuenta"), 40)
+''    Mid(strReg, 69, 40) = AjustaIzda(rs("Direccion"), 40)
+''    Mid(strReg, 109, 35) = AjustaIzda(rs("Poblacion"), 35)
+''    Mid(strReg, 144, 5) = AjustaIzda(rs("CP"), 5)
+''    Mid(strReg, 149, 14) = Space(14)
+'    ' para grabar registro opcional final (direcciones, etc)******************************
+'    While Not rs.EOF
+'         'asignación de los valores a escribir en el diskette
+'            aux_codreg = "56"
+'            i = i + 1
+'            aux_coddat = "8" & i
+''            aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")
+''            aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+''            aux_Linea = " Detalle    " 'Space(12) ' & Format(rs("Linea"), "00")
+'            aux_codref = Trim(rsRemesa("CODREF"))
+'            izda_ceros aux_codref, aux_codref, 12
+'            str3Conceptos = ""
+'            j = 0
+'            While Not rs.EOF And j < 3
+'                k = j * 40 + 1
+'                Mid(str3Conceptos, k, 30) = rs("Concepto")
+'                Mid(str3Conceptos, k + 30, 10) = Format(rs("Importe"), "currency")
+'                j = j + 1
+'                rs.MoveNext
+'            Wend
+'        'relleno por la dcha con blancos
+'            aux_libre2 = Space(14)
+''            Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_Linea; str3Conceptos; aux_libre2
+''            Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_Linea; str3Conceptos; aux_libre2
+'            Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; str3Conceptos; aux_libre2
+'            'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; str3Conceptos; aux_libre2
+'    Wend
+'    intNumLin = i
+'    'Print #1, strReg ' para grabar registro opcional final (direcciones, etc)
+'    'Print #2, strReg
+'Salir_EscribirRegistrosIndividualesOpcionales:
+'    Exit Sub
+'Error_EscribirRegistrosIndividualesOpcionales:
+'    Select Case Err
+'        Case Else
+'            MsgBox "Error nº " & Err & " en EscribirRegistrosIndividualesOpcionales" & vbCrLf & Err.Description
+'            Resume Salir_EscribirRegistrosIndividualesOpcionales
+'    End Select
+'End Sub
+
+Public Function AjustaIzda(varTexto As Variant, intHasta As Integer) As String
+    Dim strTexto As String
+    If IsNull(varTexto) Then
+        strTexto = ""
+    Else
+        strTexto = CStr(varTexto)
+    End If
+    If Len(strTexto) >= intHasta Then
+        AjustaIzda = Left(strTexto, intHasta)
+    Else
+        AjustaIzda = strTexto & Space(intHasta - Len(strTexto))
+    End If
+End Function
+
+Sub EscribirRegistroTotalOrdenante(Sum_imp As Double, ndomic As Long, ntotal_reg As Long)
+Dim aux_ndomic  As String, aux_ntotal As String, aux_importe2 As String
+ 'asignación de los valores a escribir en el diskette
+    aux_codreg = "58"
+    aux_coddat = "80"
+'    aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")
+'    aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+    aux_codref = Space(12)
+    aux_nombre = Space(40)
+    aux_entidad = Space(4)
+    aux_oficina = Space(4)
+    aux_digcont = Space(2)
+    aux_numcuenta = Space(10)
+ 
+'relleno por la izqda con ceros
+    aux_importe = Replace(Format(Sum_imp, "0.00"), ",", "")
+    izda_ceros aux_importe, aux_importe, 10
+    aux_libre1 = Space(6)
+    aux_ndomic = Trim(CStr(ndomic))
+    izda_ceros aux_ndomic, aux_ndomic, 10
+    aux_ntotal = Trim(CStr(ntotal_reg))
+    izda_ceros aux_ntotal, aux_ntotal, 10
+    aux_libre2 = Space(38)
+    Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_libre1; aux_ndomic; aux_ntotal; aux_libre2
+    'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_libre1; aux_ndomic; aux_ntotal; aux_libre2
+End Sub
+
+Sub EscribirRegistroTotalGeneral(Sum_tot As Double, ndomictot As Long, nregsop As Long)
+
+Dim aux_ndomictot, aux_ntotalreg  As String
+
+'asignación de los valores a escribir en el diskette
+    aux_codreg = "59"
+    aux_coddat = "80"
+'    aux_nif = DLookup("NIF_ORDENANTE", "Ordenante")
+'    aux_sufijo = DLookup("SUFIJO_ORDENANTE", "Ordenante")
+    aux_codref = Space(12)
+    aux_nombre = Space(40)
+    aux_entidad = "0001"
+    aux_oficina = Space(4)
+    aux_digcont = Space(2)
+    aux_numcuenta = Space(10)
+'relleno por la izqda con ceros
+    aux_importe = Replace(Format(Sum_tot, "0.00"), ",", "")
+    izda_ceros aux_importe, aux_importe, 10
+    
+    aux_libre1 = Space(6)
+'relleno por la izqda con ceros
+    aux_ndomictot = Trim(CStr(ndomictot))
+    izda_ceros aux_ndomictot, aux_ndomictot, 10
+    
+    aux_ntotalreg = Trim(CStr(nregsop))
+    izda_ceros aux_ntotalreg, aux_ntotalreg, 10
+    
+    aux_libre2 = Space(38)
+    
+    Print #1, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_libre1; aux_ndomictot; aux_ntotalreg; aux_libre2
+    'Print #2, aux_codreg; aux_coddat; aux_nif; aux_sufijo; aux_codref; aux_nombre; aux_entidad; aux_oficina; aux_digcont; aux_numcuenta; aux_importe; aux_libre1; aux_ndomictot; aux_ntotalreg; aux_libre2
+    
+    
+End Sub
+
+Sub dcha_blancos(Cadena, ByVal topec As Integer)
+    Dim nespacios As Integer
+    nespacios = topec - Len(Trim(Cadena))
+    Cadena = Cadena & Space$(nespacios)
+End Sub
+
+Sub izda_ceros(aux_entrada, aux_salida, ByVal tope As Integer)
+    Dim i As Integer, nblancos As Integer
+    Dim nceros As String
+    nceros = "0"
+    aux_salida = Trim(aux_entrada)
+    nblancos = tope - Len(Trim(aux_salida))
+    For i = 1 To (nblancos - 1)
+        nceros = Trim(nceros) & "0"
+    Next
+    aux_salida = Trim(nceros) & aux_salida
+End Sub
+
+Public Function DimeCuentaAbonoOrdenante() As String
+    DimeCuentaAbonoOrdenante = GetParam("OrdenanteEntidad") & "-" _
+                             & GetParam("OrdenanteOficina") & "-" _
+                             & GetParam("OrdenanteDigitosControl") & "-" _
+                             & GetParam("OrdenanteNumeroCuenta")
+End Function

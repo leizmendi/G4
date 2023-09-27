@@ -1,0 +1,846 @@
+Option Compare Database
+Option Explicit
+
+Public Function Envia_Email(strSubject As String, strBody As String, strTo As String, _
+                        Optional strCC As String = "", Optional strBCC As String = "", _
+                        Optional strAttachs As String = "", Optional strFirma As String = "", _
+                        Optional intRegistrarEnvio As Integer = True, _
+                        Optional lIdFacturaCab As Long = 0, Optional lIdAlbaranECab As Long = 0, _
+                        Optional intMessageSN As Integer = True, Optional strMsgResp As String, Optional intFuerzaAuto As Integer = False, _
+                        Optional strHTMLBody As String = "") As Integer
+    On Error GoTo Error_Envia_Email
+    Dim intR As Integer, strOp As String
+    Select Case 2 'Nz(Getparam("PuestoEnvioEmails_OS"), 1)
+        Case 1
+        'If Nz(Getparam("PuestoEnvioEmails_OS"), 1) = 1 Then
+            intR = Mail_with_Attachement(strSubject, strBody, strTo, strCC, strBCC, strAttachs, strFirma, intMessageSN, intFuerzaAuto, strHTMLBody)
+            strOp = "Outlook"
+        Case 2
+        'ElseIf Nz(Getparam("PuestoEnvioEmails_OS"), 1) = 2 Then
+            intR = send_email(strTo, strCC, strBCC, strSubject, strBody & IIf(strFirma <> "", vbCrLf & strFirma, ""), strAttachs, True, _
+                                , , , , , , , , intMessageSN, strMsgResp, strHTMLBody)
+            strOp = "SMTP"
+'        Case 3
+'        'ElseIf Nz(Getparam("PuestoEnvioEmails_OS"), 1) = 2 Then
+'            intR = SendGrid_Email(strTo, "", strSubject, strBody & vbCrLf & vbCrLf & strFirma, Nz(Getparam("SendGridUser"), ""), _
+'                                    Nz(Getparam("SendGridPass"), ""), Nz(Getparam("SendGridKey"), ""), strAttachs, _
+'                                    Nz(Getparam("SendGridRemite"), ""), intMessageSN, strMsgResp, strHTMLBody)
+'            strOp = "SendGrid"
+        Case Else
+            intR = Mail_ThunderBird(strSubject, strBody, strTo, strCC, strBCC, strAttachs, strFirma, intMessageSN, intFuerzaAuto, strHTMLBody)
+            strOp = "ThunderBird"
+    End Select
+    Envia_Email = intR
+    If intR = True And intRegistrarEnvio Then
+        Dim strSQL As String
+        strSQL = "INSERT INTO tbEnviosEmail ( Ahora, To, CC, Bcc, Asunto, Body, Firma, Adjuntos, IdFacturaCab, IdAlbaranECab )"
+        strSQL = strSQL & " SELECT Now() as ahora, '" & strTo & "' AS to, '" & strCC & "' AS cc, '" & strBCC & "' AS bcc" _
+                        & ", '" & Replace(strSubject, "'", "`") & "' as asunto, '" & Replace(strBody, "'", "`") & "' as body, '" & strFirma & "' as firma" _
+                        & ", '" & strAttachs & "' as adjuntos, " & lIdFacturaCab & " as idfac, " & lIdAlbaranECab & " as idalb"
+        CurrentDb.Execute strSQL, dbFailOnError
+    End If
+
+Salir_Envia_Email:
+    Exit Function
+Error_Envia_Email:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en Envia_Email" & vbCrLf & Err.Description
+            Resume Salir_Envia_Email
+    End Select
+End Function
+
+Public Function Mail_with_Attachement(strSubject As String, _
+                                      strBody As String, _
+                                      strTo As String, _
+                                      strCC As String, _
+                                      strBCC As String, _
+                                      strAttachs As String, strFirma As String, Optional intMessageSN As Integer = True, _
+                                      Optional intFuerzaAuto As Integer = False, _
+                                      Optional strHTMLBody As String = "") As Integer
+    On Error GoTo Error_Mail_with_Attachement
+    Dim oO  As New Outlook.Application, i As Integer, j As Integer, intOutlookCreated As Integer
+    Dim sAPPPath As String
+    If IsAppRunning("Outlook.Application") = True Then    'Outlook was already running
+        Set oO = GetObject(, "Outlook.Application")    'Bind to existing instance of Outlook
+    Else    'Could not get instance of Outlook, so create a new one
+        sAPPPath = GetAppExePath("outlook.exe")    'determine outlook's installation path
+        Shell (sAPPPath)    'start outlook
+        Do While Not IsAppRunning("Outlook.Application")
+            DoEvents
+        Loop
+        intOutlookCreated = True
+        Set oO = GetObject(, "Outlook.Application")   'Bind to existing instance of Outlook
+    End If
+    
+    'On Error Resume Next
+    'Set oO = GetObject("Outlook.application")
+    'If Err <> 0 Then
+    '    Set oO = CreateObject("Outlook.application")
+    '    intOutlookCreated = True
+    'End If
+    'On Error GoTo Error_Mail_with_Attachement
+    Dim myMail As Outlook.MailItem, strFile As String
+    Set myMail = oO.CreateItem(olMailItem)
+    'Set myMail = oO.CreateItemFromTemplate(DirectorioDe(CurrentDb.Name) & "leizmendi.dot")
+    With myMail
+        .To = strTo
+        .CC = strCC
+        .Bcc = strBCC
+        .Subject = strSubject
+        .Body = strBody & IIf(strFirma <> "", vbCrLf & vbCrLf & strFirma, "")
+        If strHTMLBody <> "" Then .HTMLBody = strHTMLBody
+        
+        If Len(strAttachs) > 0 And InStr(1, strAttachs, ";") = 0 Then strAttachs = strAttachs & ";"
+        i = InStr(j + 1, strAttachs, ";")
+        While i > 0
+            strFile = Mid(strAttachs, j + 1, i - (j + 1))
+            If Dir(strFile) <> "" Then
+                .Attachments.Add strFile
+            Else
+                MsgBox "No se pudo adjuntar: " & strFile, vbExclamation
+            End If
+            j = i
+            i = InStr(j + 1, strAttachs, ";")
+        Wend
+    End With
+    If Nz(GetParam("OutlookEnvioAutoPantalla"), 2) = 2 And Not intFuerzaAuto Then
+        myMail.Display
+    Else
+        myMail.Send
+        If intMessageSN Then MsgBox "El Email " & strSubject & " ha sido enviado correctamente a " & strTo, vbInformation, "Email OK"
+        If intOutlookCreated Then oO.Quit
+    End If
+    Mail_with_Attachement = True
+    
+    'Set oO = Nothing
+Salir_Mail_with_Attachement:
+    Exit Function
+Error_Mail_with_Attachement:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en Mail_with_Attachement" & vbCrLf & Err.Description
+            Resume Salir_Mail_with_Attachement
+    End Select
+End Function
+
+
+Public Function Mail_ThunderBird(strSubject As String, _
+                                strBody As String, _
+                                strTo As String, _
+                                strCC As String, _
+                                strBCC As String, _
+                                strAttachs As String, strFirma As String, Optional intMessageSN As Integer = True, _
+                                Optional intFuerzaAuto As Integer = False, _
+                                Optional strHTMLBody As String = "") As Integer
+    On Error GoTo HandleError
+    Dim sAPPPath As String, sCommand As String
+    sAPPPath = GetAppExePath("thunderbird.exe")    'determine thunderbird's installation path
+    strBody = Replace(strBody, "'", "")
+    strHTMLBody = Replace(strHTMLBody, "'", "")
+    sCommand = ConComillas(sAPPPath) & " -compose to=" & ConComillas(strTo, True) & IIf(strCC <> "", " cc=" & ConComillas(strCC, True), "") _
+                                                                                 & IIf(strBCC <> "", " bcc=" & ConComillas(strBCC, True), "") _
+                                                                                 & ",subject='" & strSubject & "',preselectid='id1',body=" & IIf(strHTMLBody <> "", ConComillas(strHTMLBody, True), ConComillas(strBody, True)) & _
+                                                                                 ",attachment='" & strAttachs & "'"
+    Shell sCommand, vbMaximizedFocus
+    Mail_ThunderBird = True
+HandleExit:
+    Exit Function
+HandleError:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en Mail_ThunderBird" & vbCrLf & Err.Description
+            Resume HandleExit
+    End Select
+End Function
+
+
+
+Public Function send_email(strTo As String, strCC As String, strBCC As String, _
+                            strSubject As String, strTextBody As String, _
+                            Optional strAttachment As String = "", _
+                            Optional smtpusessl As Boolean = True, _
+                            Optional sendusing As Integer = 2, _
+                            Optional smtpauthenticate As Integer = 1, _
+                            Optional smtpconnectiontimeout As Integer = 60, _
+                            Optional smtpserver As String = "", _
+                            Optional smtpserverport As Integer = 0, _
+                            Optional sendusername As String = "", _
+                            Optional sendpassword As String = "", _
+                            Optional strFrom As String = "", _
+                            Optional intMessageSN As Integer = True, Optional strMsgResp As String, _
+                            Optional strHTMLBody As String = "")
+
+'a título informativo aquí--------------------------------------------
+Const cdoSendUsingPickup = 1
+Const cdoSendUsingPort = 2 'Must use this to use Delivery Notification
+Const cdoAnonymous = 0
+Const cdoBasic = 1 ' clear text
+Const cdoNTLM = 2 'NTLM
+'Delivery Status Notifications
+Const cdoDSNDefault = 0 'None
+Const cdoDSNNever = 1 'None
+Const cdoDSNFailure = 2 'Failure
+Const cdoDSNSuccess = 4 'Success
+Const cdoDSNDelay = 8 'Delay
+Const cdoDSNSuccessFailOrDelay = 14 'Success, failure or delay
+'a título informativo aquí--------------------------------------------
+
+    On Error GoTo Error_send_email
+    
+    Dim cdomsg As Object
+    Dim i As Integer, j As Integer
+    Dim strMsgErr As String
+    'On Error Resume Next
+    Set cdomsg = CreateObject("CDO.message")
+    If smtpserver = "" Then smtpserver = Nz(GetParam("EmailSmtpServer"), "")
+    If smtpserverport = 0 Then smtpserverport = Nz(GetParam("EmailSmtpServerPort"), 0)
+    If sendusername = "" Then sendusername = Nz(GetParam("EmailUser"), "")
+    If sendpassword = "" Then sendpassword = Nz(GetParam("EmailPassword"), "")
+    If strFrom = "" Then strFrom = Nz(GetParam("EmailRemite"), "")
+    If smtpusessl Then smtpusessl = Nz(GetParam("EmailSSL"), True)
+    
+    With cdomsg.Configuration.Fields
+    .item("http://schemas.microsoft.com/cdo/configuration/sendusing") = 2 'sendusing 'NTLM method
+    .item("http://schemas.microsoft.com/cdo/configuration/smtpserver") = smtpserver
+    .item("http://schemas.microsoft.com/cdo/configuration/smptserverport") = smtpserverport
+    .item("http://schemas.microsoft.com/cdo/configuration/smtpauthenticate") = smtpauthenticate
+    .item("http://schemas.microsoft.com/cdo/configuration/smtpusessl") = smtpusessl
+    .item("http://schemas.microsoft.com/cdo/configuration/smtpconnectiontimeout") = smtpconnectiontimeout
+    .item("http://schemas.microsoft.com/cdo/configuration/sendusername") = sendusername
+    .item("http://schemas.microsoft.com/cdo/configuration/sendpassword") = sendpassword
+    .Update
+    End With
+    ' build email parts
+    If strTo = "" Then strTo = strFrom
+    With cdomsg
+        .From = strFrom
+        .To = strTo
+        If (Len(strAttachment) > 0) Then
+            strAttachment = strAttachment & ";"
+bucle_adjuntos:
+            j = i + 1
+            i = InStr(j, strAttachment, ";")
+            If i > 0 Then
+                .AddAttachment Mid(strAttachment, j, i - j)
+                GoTo bucle_adjuntos
+            End If
+        End If
+    '    If (Len(strHTMLBody) > 0) Then .HTMLBody = strHTMLBody                '"<H4>See attached file</H4>"
+        If strBCC = "" Then strBCC = Nz(GetParam("EmailEnviarTambienA"), "")
+        If (Len(strBCC) > 0) Then .Bcc = strBCC
+        If (Len(strCC) > 0) Then .CC = strCC
+        If (Len(strSubject) > 0) Then .Subject = strSubject
+        If (Len(strTextBody) > 0) Then .TextBody = strTextBody
+        If (Len(strHTMLBody) > 0) Then .HTMLBody = strHTMLBody
+    
+    .Send
+    End With
+    Set cdomsg = Nothing
+Salir_send_email:
+    If strMsgErr <> "" Then
+        strMsgResp = "No se ha podido enviar el email. -> Error: " + strMsgErr
+        If intMessageSN Then MsgBox strMsgResp, vbExclamation, "Falló el envío"
+        send_email = False
+    Else
+        strMsgResp = "El email a " & Trim(strTo & " " & strCC & " " & strBCC) & " se ha enviado correctamente."
+        If intMessageSN Then MsgBox strMsgResp, vbInformation, "Email OK"
+        send_email = True
+    End If
+    Exit Function
+Error_send_email:
+    Select Case Err
+        Case Else
+            strMsgErr = "Error nº " & Err & " en send_email" & vbCrLf & Err.Description
+            Resume Salir_send_email
+    End Select
+End Function
+
+
+Public Function DimeEmailCli(lIdCliente As Long, Optional intSiNoHayPedir As Integer = True) As String
+    On Error GoTo HandleError
+    Dim strR As String, iR As Integer
+    strR = Nz(DLookup("Email", "tbClientes", "IdCliente = " & lIdCliente), "")
+    If strR = "" And intSiNoHayPedir Then
+        strR = Nz(myinputbox("Introduzca Email de Envío", "Dirección de Email:"), "")
+        If strR <> "" Then
+            iR = MsgBox("¿Grabar el email en la ficha del cliente?", vbYesNo + vbQuestion)
+            If iR = vbYes Then CurrentDb.Execute "UPDATE tbClientes SET Email = " & ConComillas(strR, True) & " WHERE IdCliente = " & lIdCliente, dbFailOnError
+        End If
+    End If
+    DimeEmailCli = strR
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function EnviarFacturaXEmail(lngIdFactura As Long, Optional strEmail As String = "", Optional intInputBox As Integer = True, _
+                                    Optional intMessageSN As Integer = True, Optional strMsgResp As String, Optional strListaFacs As String = "") As Integer
+    On Error GoTo Error_EnviarFacturaXEmail
+
+    Dim strFac As String, strPdfFac As String, strMensaje As String, dtIni As Date, lS As Long, intR As Integer, lngIdFichaCab As Long
+    Dim strAsunto As String
+    If strEmail = "" Then
+        strEmail = DimeEmailCli(Nz(DLookup("IdCliente", "tbFacturasCab", "IdFacturaCab = " & lngIdFactura), ""))
+        'Nz(DLookup("Email", "tbClientes", "NIF = " & ConComillas(Nz(DLookup("NIF", "tbFacturasCab", "IdFactura = " & lngIdFactura), ""))), "")
+        If strEmail = "" Then
+            strMsgResp = "No se ha indicado dirección de email de envío" & vbCrLf & Nz(DLookup("NIF", "tbFacturasCab", "IdFacturaCab = " & lngIdFactura), "")
+            If intMessageSN Then MsgBox "No se ha indicado dirección de email de envío", vbExclamation
+            GoTo Salir_EnviarFacturaXEmail
+        End If
+    End If
+    strFac = Nz(DLookup("NumFactura", "tbFacturasCab", "IdFacturaCab = " & lngIdFactura), "")
+    If strFac <> "" Then
+        strPdfFac = Dime_GenFacPDF(lngIdFactura)
+        strListaFacs = strPdfFac & ";"
+    Else
+        If strListaFacs = "" Then
+            strMsgResp = "No se encontró Factura Id: " & lngIdFactura
+            If intMessageSN Then MsgBox strMsgResp, vbExclamation
+            Exit Function
+        End If
+        Dim vFacs As Variant, i As Integer
+        If Right(strListaFacs, 1) = ";" Then strListaFacs = recdertop(strListaFacs, 1, 0)
+        vFacs = Split(strListaFacs, ";")
+        strListaFacs = ""
+        For i = 0 To UBound(vFacs)
+            lngIdFactura = CLng(vFacs(i))
+            strPdfFac = Dime_GenFacPDF(lngIdFactura)
+            strListaFacs = strListaFacs & strPdfFac & ";"
+        Next i
+    End If
+    'ImprimirFactura lngIdFactura, 4, strPdfFac
+EnviarEmail:
+    Dim strAdjuntarFicheros As String
+    strAdjuntarFicheros = strListaFacs 'strPdfFac & ";"
+    If PonParrafoEnvioFacturaEmail(lngIdFactura, strAdjuntarFicheros, intInputBox) = False Then
+        strMsgResp = "Se canceló el envío de factura por email"
+        If intMessageSN Then MsgBox strMsgResp, vbExclamation
+        GoTo Salir_EnviarFacturaXEmail
+    End If
+    strMensaje = Nz(GetParam("ParrafoEnvioFacturaEmail_OK"), "Adjuntamos factura")
+    strAsunto = "Factura: " & strFac
+    If intInputBox Then
+        strEmail = Nz(myinputbox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
+        
+        strAsunto = Nz(myinputbox("Asunto:", "Asunto del mensaje:", "Factura: " & strFac), "")
+        If strAsunto = "" Then GoTo Salir_EnviarFacturaXEmail
+    End If
+
+    If InStr(strAdjuntarFicheros, strPdfFac) > 0 Then
+        dtIni = Now
+        While Dir(strPdfFac) = "" And lS < 30
+            DoEvents
+            lS = DateDiff("s", dtIni, Now)
+            SysCmd acSysCmdSetStatus, lS
+        Wend
+    End If
+    'lngIdFichaCab = Nz(DLookup("IdFichaCab", "tbFichasCab", "IdFactura = " & lngIdFactura), 0)
+    'If lngIdFichaCab = 0 Then lngIdFichaCab = Nz(DLookup("IdFrom", "tbCajaDet", "Origen = 'E' AND IdFParcial = " & lngIdFactura), 0)
+    EnviarFacturaXEmail = Envia_Email(strAsunto, strMensaje, strEmail, , , strAdjuntarFicheros, , , lngIdFactura, , intMessageSN, strMsgResp)
+Salir_EnviarFacturaXEmail:
+    Exit Function
+Error_EnviarFacturaXEmail:
+    Select Case Err
+        Case Else
+            strMsgResp = strMsgResp & vbCrLf & "Error nº " & Err & " en EnviarFacturaXEmail, Factura: " & strFac & vbCrLf & Err.Description
+            If intMessageSN = True Then MsgBox strMsgResp, vbExclamation
+            Resume Salir_EnviarFacturaXEmail
+    End Select
+
+End Function
+
+
+Public Function EnviarAlbaranFirmadoXEmail(lIdAlbaranDispositivo As Long, Optional strEmail As String = "", Optional intInputBox As Integer = True, _
+                                    Optional intMessageSN As Integer = True, Optional strMsgResp As String) As Integer
+    On Error GoTo HandleError
+
+    Dim strFac As String, sAlbPdf As String, strMensaje As String, dtIni As Date, lS As Long, intR As Integer, lngIdFichaCab As Long
+    Dim lIdAlbaranECab As Long, sListaAlbs As String
+    Dim strAsunto As String
+    lIdAlbaranECab = Nz(DLookup("IdAlbaranECab", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAlbaranDispositivo), 0)
+    If lIdAlbaranECab = 0 Then
+        MsgBox "No se encontró IdAlbaranECab correspondiente a Albarán firmado", vbExclamation
+        GoTo HandleExit
+    End If
+    If strEmail = "" Then
+        strEmail = DimeEmailCli(Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbaranECab), ""))
+        'Nz(DLookup("Email", "tbClientes", "NIF = " & ConComillas(Nz(DLookup("NIF", "tbFacturasCab", "IdFactura = " & lIdAlbaranEcab), ""))), "")
+        If strEmail = "" Then
+            strMsgResp = "No se ha indicado dirección de email de envío" & vbCrLf & Nz(DLookup("NIF", "tbFacturasCab", "IdFacturaCab = " & lIdAlbaranECab), "")
+            If intMessageSN Then MsgBox "No se ha indicado dirección de email de envío", vbExclamation
+            GoTo HandleExit
+        End If
+    End If
+    sAlbPdf = Nz(DLookup("file_pdf", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAlbaranDispositivo), "")
+    If sAlbPdf = "" Then
+        MsgBox "No se encontró PDF correspondiente a Albarán firmado", vbExclamation
+        GoTo HandleExit
+    End If
+    sAlbPdf = GetParam("CarpetaAlbaranesPDF") & sAlbPdf
+    sListaAlbs = sAlbPdf & ";"
+EnviarEmail:
+    Dim strAdjuntarFicheros As String
+    strAdjuntarFicheros = sListaAlbs 'sAlbPdf & ";"
+    If PonParrafoEnvioAlbaranEmail(lIdAlbaranECab, strAdjuntarFicheros, intInputBox) = False Then
+        strMsgResp = "Se canceló el envío de albarán por email"
+        If intMessageSN Then MsgBox strMsgResp, vbExclamation
+        GoTo HandleExit
+    End If
+    strMensaje = Nz(GetParam("ParrafoEnvioAlbaranEmail_OK"), "Adjuntamos albarán")
+    strAsunto = "Albarán Nº: " & DLookup("Numero", "tbAlbaranesEnvioCab", "idAlbaranECab = " & lIdAlbaranECab)
+    If intInputBox Then
+        strEmail = Nz(myinputbox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
+        
+        strAsunto = Nz(myinputbox("Asunto:", "Asunto del mensaje:", strAsunto), "")
+        If strAsunto = "" Then GoTo HandleExit
+    End If
+
+    If InStr(strAdjuntarFicheros, sAlbPdf) > 0 Then
+        dtIni = Now
+        While Dir(sAlbPdf) = "" And lS < 30
+            DoEvents
+            lS = DateDiff("s", dtIni, Now)
+            SysCmd acSysCmdSetStatus, lS
+        Wend
+    End If
+    'lngIdFichaCab = Nz(DLookup("IdFichaCab", "tbFichasCab", "IdFactura = " & lIdAlbaranEcab), 0)
+    'If lngIdFichaCab = 0 Then lngIdFichaCab = Nz(DLookup("IdFrom", "tbCajaDet", "Origen = 'E' AND IdFParcial = " & lIdAlbaranEcab), 0)
+    EnviarAlbaranFirmadoXEmail = Envia_Email(strAsunto, strMensaje, strEmail, , , strAdjuntarFicheros, , , lIdAlbaranECab, , intMessageSN, strMsgResp)
+HandleExit:
+    Exit Function
+HandleError:
+    Select Case Err
+        Case Else
+            strMsgResp = strMsgResp & vbCrLf & "Error nº " & Err & " en EnviarAlbaranFirmadoXEmail" & vbCrLf & Err.Description
+            If intMessageSN = True Then MsgBox strMsgResp, vbExclamation
+            Resume HandleExit
+    End Select
+
+End Function
+
+Function Dime_GenFacPDF(lIdFacturaCab As Long) As String
+    On Error GoTo HandleError
+    Dim strFac As String, intR As Integer, strPdfFac  As String
+    strFac = Nz(DLookup("NumFactura", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), "")
+    If strFac <> "" Then
+        strPdfFac = GetParam("AplicacionCarpetaDatos", True) & "facs\" & SoloNum(strFac) & ".pdf"
+        If Dir(strPdfFac) <> "" Then
+            If Nz(GetParam("FacturasPDFSobreescribirSN"), False) = True Then
+                intR = vbYes
+            Else
+                intR = MsgBox("¿Volver a generar la factura " & strFac & "?", vbYesNoCancel + vbQuestion)
+                If intR = vbCancel Then GoTo HandleExit
+                If intR = vbNo Then GoTo Finish
+            End If
+        End If
+        ImprimirFactura lIdFacturaCab, 4, strPdfFac, False
+    End If
+    
+Finish:
+    Dime_GenFacPDF = strPdfFac
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Public Function EnviarFacturaXEmail_Recibo(lngNumRecibo As Long, Optional intMessageSN As Integer = True, Optional strMsgResp As String) As Integer
+    On Error GoTo Error_EnviarFacturaXEmail_Recibo
+    Dim lngIdFactura As Long
+    
+    lngIdFactura = Nz(DLookup("IdFactura", "tbFichasPagosPrevistos", "NumRecibo = " & lngNumRecibo), 0)
+    If lngIdFactura <> 0 Then EnviarFacturaXEmail_Recibo = EnviarFacturaXEmail(lngIdFactura, , False, intMessageSN, strMsgResp)
+        
+Salir_EnviarFacturaXEmail_Recibo:
+    Exit Function
+Error_EnviarFacturaXEmail_Recibo:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en EnviarFacturaXEmail_Recibo" & vbCrLf & Err.Description
+            Resume Salir_EnviarFacturaXEmail_Recibo
+    End Select
+
+End Function
+
+
+'---------------------------------------------------------------------------------------
+' Procedure : StartOutlook
+' Author    : Daniel Pineault, CARDA Consultants Inc.
+' Website   : http://www.cardaconsultants.com
+' Purpose   : Demonstration of how one can start outlook if it isn't already started
+'             considering CreateObject("Outlook.Application") not longer works!
+' Copyright : The following may be altered and reused as you wish so long as the
+'             copyright notice is left unchanged (including Author, Website and
+'             Copyright).  It may not be sold/resold or reposted on other sites (links
+'             back to this site are allowed).
+'
+' Usage:
+' ~~~~~~
+'
+'
+' Revision History:
+' Rev       Date(yyyy/mm/dd)        Description
+' **************************************************************************************
+' 1         2014-Oct-31                 Initial Release
+'---------------------------------------------------------------------------------------
+Function StartOutlook()
+    On Error GoTo Error_Handler
+    Dim oOutlook        As Object
+    Dim sAPPPath        As String
+ 
+    If IsAppRunning("Outlook.Application") = True Then    'Outlook was already running
+        Set oOutlook = GetObject(, "Outlook.Application")    'Bind to existing instance of Outlook
+    Else    'Could not get instance of Outlook, so create a new one
+        sAPPPath = GetAppExePath("outlook.exe")    'determine outlook's installation path
+        Shell (sAPPPath)    'start outlook
+        Do While Not IsAppRunning("Outlook.Application")
+            DoEvents
+        Loop
+        Set oOutlook = GetObject(, "Outlook.Application")    'Bind to existing instance of Outlook
+    End If
+ 
+    '    MsgBox "Outlook Should be running now, let's do something"
+    Const olMailItem = 0
+    Dim oOutlookMsg     As Object
+    Set oOutlookMsg = oOutlook.CreateItem(olMailItem)    'Start a new e-mail message
+    oOutlookMsg.Display    'Show the message to the user
+ 
+Error_Handler_Exit:
+    On Error Resume Next
+    Set oOutlook = Nothing
+    Exit Function
+ 
+Error_Handler:
+    MsgBox "The following error has occured" & vbCrLf & vbCrLf & _
+           "Error Number: " & Err.Number & vbCrLf & _
+           "Error Source: StartOutlook" & vbCrLf & _
+           "Error Description: " & Err.Description _
+           , vbOKOnly + vbCritical, "An Error has Occured!"
+    Resume Error_Handler_Exit
+End Function
+ 
+'---------------------------------------------------------------------------------------
+' Procedure : IsAppRunning
+' Author    : Daniel Pineault, CARDA Consultants Inc.
+' Website   : http://www.cardaconsultants.com
+' Purpose   : Determine is an App is running or not
+' Copyright : The following may be altered and reused as you wish so long as the
+'             copyright notice is left unchanged (including Author, Website and
+'             Copyright).  It may not be sold/resold or reposted on other sites (links
+'             back to this site are allowed).
+'
+' Input Variables:
+' ~~~~~~~~~~~~~~~~
+' sApp      : GetObject Application to verify if it is running or not
+'
+' Usage:
+' ~~~~~~
+' IsAppRunning("Outlook.Application")
+' IsAppRunning("Excel.Application")
+' IsAppRunning("Word.Application")
+'
+' Revision History:
+' Rev       Date(yyyy/mm/dd)        Description
+' **************************************************************************************
+' 1         2014-Oct-31                 Initial Release
+'---------------------------------------------------------------------------------------
+Function IsAppRunning(sApp As String) As Boolean
+    On Error GoTo Error_Handler
+    Dim oApp            As Object
+ 
+    Set oApp = GetObject(, sApp)
+    IsAppRunning = True
+ 
+Error_Handler_Exit:
+    On Error Resume Next
+    Set oApp = Nothing
+    Exit Function
+ 
+Error_Handler:
+    Resume Error_Handler_Exit
+End Function
+ 
+'---------------------------------------------------------------------------------------
+' Procedure : GetAppExePath
+' Author    : Daniel Pineault, CARDA Consultants Inc.
+' Website   : http://www.cardaconsultants.com
+' Purpose   : Determine the path for a given exe installed on the local computer
+' Copyright : The following may be altered and reused as you wish so long as the
+'             copyright notice is left unchanged (including Author, Website and
+'             Copyright).  It may not be sold/resold or reposted on other sites (links
+'             back to this site are allowed).
+'
+' Input Variables:
+' ~~~~~~~~~~~~~~~~
+' sEXEName  : Name of the exe to locate
+'
+' Usage:
+' ~~~~~~
+' Call GetAppExePath("msaccess.exe")
+' GetAppExePath("firefox.exe")
+' GetAppExePath("outlook.exe")
+'
+' Revision History:
+' Rev       Date(yyyy/mm/dd)        Description
+' **************************************************************************************
+' 1         2014-Oct-31                 Initial Release
+'---------------------------------------------------------------------------------------
+Function GetAppExePath(ByVal sExeName As String) As String
+    On Error GoTo Error_Handler
+    Dim WSHShell        As Object
+ 
+    Set WSHShell = CreateObject("Wscript.Shell")
+    GetAppExePath = WSHShell.RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\" & sExeName & "\")
+ 
+Error_Handler_Exit:
+    On Error Resume Next
+    Set WSHShell = Nothing
+    Exit Function
+ 
+Error_Handler:
+    If Err.Number = -2147024894 Then
+        'Cannot locate requested exe????
+    Else
+        MsgBox "The following error has occured." & vbCrLf & vbCrLf & _
+               "Error Number: " & Err.Number & vbCrLf & _
+               "Error Source: GetAppExePath" & vbCrLf & _
+               "Error Description: " & Err.Description, _
+               vbCritical, "An Error has Occured!"
+    End If
+    Resume Error_Handler_Exit
+End Function
+
+
+'---------------------------------------------------------------------------------------
+' Procedure : Outlook_OpenEmail
+' Author    : Daniel Pineault, CARDA Consultants Inc.
+' Website   : http://www.cardaconsultants.com
+' Purpose   : Locate and open an Item based on its EntryId
+' Copyright : The following is release as Attribution-ShareAlike 4.0 International
+'             (CC BY-SA 4.0) - https://creativecommons.org/licenses/by-sa/4.0/
+' Req'd Refs: Uses Late Binding, so none required
+'
+' Input Variables:
+' ~~~~~~~~~~~~~~~~
+' sEntryId - The EntryId of the Outlook Item to locate and display to the user
+'
+' Usage:
+' ~~~~~~
+' Outlook_OpenEmail "000000004829439D8D28C14BAA8D1C72F0D28EA6E4552500"
+'
+' Revision History:
+' Rev       Date(yyyy/mm/dd)        Description
+' **************************************************************************************
+' 1         2019-08-19              Initial Release (Blog help)
+'---------------------------------------------------------------------------------------
+Function Outlook_OpenEmail(ByVal sEntryId As String)
+'REF: https://docs.microsoft.com/en-us/office/vba/api/outlook.namespace.getitemfromid
+'    #Const EarlyBind = 1 'Use Early Binding
+    #Const EarlyBind = 0    'Use Late Binding
+    #If EarlyBind Then
+        Dim oOutlook          As Outlook.Application
+        Dim oOutlookMsg       As Outlook.MailItem
+        Dim oNameSpace        As Outlook.Namespace
+    #Else
+        Dim oOutlook          As Object
+        Dim oOutlookMsg       As Object
+        Dim oNameSpace        As Object
+    #End If
+ 
+    On Error Resume Next
+    Set oOutlook = GetObject(, "Outlook.Application")        'Bind to existing instance of Outlook
+    If Err.Number <> 0 Then        'Could not get instance, so create a new one
+        Err.Clear
+        Set oOutlook = CreateObject("Outlook.Application")
+    End If
+    On Error GoTo Error_Handler
+ 
+    Set oNameSpace = oOutlook.GetNamespace("MAPI")
+    'Find the item, if not found it generates a -2147221233 error
+    Set oOutlookMsg = oNameSpace.GetItemFromID(sEntryId)
+    'Open/Display the item to the user
+    oOutlookMsg.Display
+ 
+Error_Handler_Exit:
+    On Error Resume Next
+    If Not oOutlookMsg Is Nothing Then Set oOutlookMsg = Nothing
+    If Not oOutlook Is Nothing Then Set oOutlook = Nothing
+    Exit Function
+ 
+Error_Handler:
+    If Err.Number = "287" Then
+        MsgBox "You clicked No to the Outlook security warning. " & _
+               "Rerun the procedure and click Yes to access e-mail " & _
+               "addresses to send your message. For more information, " & _
+               "see the document at http://www.microsoft.com/office" & _
+               "/previous/outlook/downloads/security.asp."
+    ElseIf Err.Number = -2147221233 Then
+        MsgBox "Outlook item not found.", vbInformation + vbOKOnly
+    Else
+        MsgBox "The following error has occured" & vbCrLf & vbCrLf & _
+               "Error Number: " & Err.Number & vbCrLf & _
+               "Error Source: Outlook_OpenEmail" & vbCrLf & _
+               "Error Description: " & Err.Description & _
+               Switch(Erl = 0, "", Erl <> 0, vbCrLf & "Line No: " & Erl) _
+               , vbOKOnly + vbCritical, "An Error has Occured!"
+    End If
+    Resume Error_Handler_Exit
+End Function
+
+Public Function PonNotificacionPEN(lngIdFichaCab As Long, iNumNoti As Integer, sPEN As String) As Boolean
+    On Error GoTo HandleError
+    Dim sNotiPEN As String, i As Integer, sSQL As String
+    sNotiPEN = Nz(DLookup("NotificacionesPEN", "tbFichasCab_Totales", "IdFichacab = " & lngIdFichaCab), "")
+    i = InStr(sNotiPEN, "n_" & iNumNoti & ":")
+    If i = 0 Then
+        sNotiPEN = sNotiPEN & "n_" & iNumNoti & ":" & sPEN
+    Else
+        Mid(sNotiPEN, i + 4, 1) = sPEN
+    End If
+    sSQL = "UPDATE tbFichasCab_Totales SET NotificacionesPEN = " & ConComillas(sNotiPEN) & " WHERE IdFichaCab = " & lngIdFichaCab
+    CurrentDb.Execute sSQL, dbFailOnError
+    PonNotificacionPEN = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DimeNotificacionPEN(lngIdFichaCab As Long, iNumNoti As Integer) As String
+    On Error GoTo HandleError
+    Dim sNotiPEN As String, i As Integer, sSQL As String
+    sNotiPEN = Nz(DLookup("NotificacionesPEN", "tbFichasCab_Totales", "IdFichacab = " & lngIdFichaCab), "")
+    i = InStr(sNotiPEN, "n_" & iNumNoti & ":")
+    If i = 0 Then
+        sNotiPEN = "P"
+    Else
+        sNotiPEN = Mid(sNotiPEN, i + 4, 1)
+    End If
+    DimeNotificacionPEN = sNotiPEN
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DimeNotificacionIdioma(iNumNoti As Integer, lIdIdioma As Long, sMensaje As String, sAsunto As String, sAdjuntos As String) As Boolean
+    On Error GoTo HandleError
+    sMensaje = Nz(GetParam("Notificacion_" & iNumNoti & "_Mensaje_IdIdioma_" & lIdIdioma), "")
+    If sMensaje = "" Then sMensaje = Nz(GetParam("Notificacion_" & iNumNoti & "_Mensaje"), "")
+    sAsunto = Nz(GetParam("Notificacion_" & iNumNoti & "_Asunto_IdIdioma_" & lIdIdioma), "")
+    If sAsunto = "" Then sAsunto = Nz(GetParam("Notificacion_" & iNumNoti & "_Asunto"), "")
+    sAdjuntos = Nz(GetParam("Notificacion_" & iNumNoti & "_AdjuntarFicheros_IdIdioma_" & lIdIdioma), "")
+    If sAdjuntos = "" Then sAdjuntos = Nz(GetParam("Notificacion_" & iNumNoti & "_AdjuntarFicheros"), "")
+    DimeNotificacionIdioma = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function PonParrafoEnvioFacturaEmail(Optional lngIdFactura As Long = 0, Optional strAdjuntarFicheros As String = "NO", Optional intInputBox As Integer = True) As Integer
+    On Error GoTo Error_PonParrafoEnvioFacturaEmail
+    Dim strR As String, rs As Recordset, i As Integer
+    Dim strSQL As String
+    If lngIdFactura <> 0 Then
+        strSQL = "SELECT ExtraeLin(Nz([CabeceraCliente],''),1) AS Cliente, tbFacturasCab.*"
+        strSQL = strSQL & " From tbFacturasCab"
+        strSQL = strSQL & " WHERE tbFacturasCab.IdFacturaCab=" & lngIdFactura
+        CurrentDb.QueryDefs("qryFactura").SQL = strSQL
+    End If
+    strSQL = "SELECT Cliente, NumFactura, FechaFactura, NIF, [TotalBase]+[TotalIVA] AS TotalFactura, CabeceraCliente, TotalBase, TotalIVA, Notas, GetParam('EmailFirma') as EmailFirma"
+    strSQL = strSQL & " FROM qryFactura;"
+    CurrentDb.QueryDefs("qryFacturaEnvioEmail").SQL = strSQL
+
+    Set rs = CurrentDb.OpenRecordset("qryFacturaEnvioEmail", dbOpenSnapshot)
+    
+    strR = spNz(GetParam("FacturasMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos factura |NumFactura| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EstablecimientoNombre"))
+    For i = 0 To rs.Fields.Count - 1
+        strR = Replace(strR, "|" & rs(i).Name & "|", Nz(rs(i), ""))
+    Next i
+    If intInputBox Then strR = Nz(myinputbox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
+    
+    SetParam "ParrafoEnvioFacturaEmail_OK", IIf(strR = "", "-", strR), 12
+    PonParrafoEnvioFacturaEmail = strR <> ""
+Salir_PonParrafoEnvioFacturaEmail:
+    Exit Function
+Error_PonParrafoEnvioFacturaEmail:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en PonParrafoEnvioFacturaEmail" & vbCrLf & Err.Description
+            Resume Salir_PonParrafoEnvioFacturaEmail
+    End Select
+
+End Function
+
+Public Function PonParrafoEnvioAlbaranEmail(Optional lIdAlbaranECab As Long = 0, Optional strAdjuntarFicheros As String = "NO", Optional intInputBox As Integer = True) As Integer
+    On Error GoTo Error_PonParrafoEnvioAlbaranEmail
+    Dim strR As String, rs As Recordset, i As Integer
+    Dim strSQL As String
+    If lIdAlbaranECab <> 0 Then
+        strSQL = "SELECT DimeCliente(IdCliente) AS Cliente, tbAlbaranesEnvioCab.*"
+        strSQL = strSQL & " From tbAlbaranesEnvioCab"
+        strSQL = strSQL & " WHERE IdAlbaranECab = " & lIdAlbaranECab
+        CurrentDb.QueryDefs("qryAlbaran").SQL = strSQL
+    End If
+    strSQL = "SELECT Cliente, Numero AS NumAlbaran, Fecha AS FechaAlbaran, FechaEntregado, DireccionEnvio, Notas, GetParam('EmailFirma') AS EmailFirma" _
+        & " FROM qryAlbaran;"
+    CurrentDb.QueryDefs("qryAlbaranEnvioEmail").SQL = strSQL
+
+    Set rs = CurrentDb.OpenRecordset("qryAlbaranEnvioEmail", dbOpenSnapshot)
+    
+    strR = spNz(GetParam("AlbaranesMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos albarán Nº |NumAlbaran| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EmailFirma"))
+    For i = 0 To rs.Fields.Count - 1
+        strR = Replace(strR, "|" & rs(i).Name & "|", Nz(rs(i), ""))
+    Next i
+    If intInputBox Then strR = Nz(myinputbox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
+    
+    SetParam "ParrafoEnvioAlbaranEmail_OK", IIf(strR = "", "-", strR), 12
+    PonParrafoEnvioAlbaranEmail = strR <> ""
+Salir_PonParrafoEnvioAlbaranEmail:
+    Exit Function
+Error_PonParrafoEnvioAlbaranEmail:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en PonParrafoEnvioAlbaranEmail" & vbCrLf & Err.Description
+            Resume Salir_PonParrafoEnvioAlbaranEmail
+    End Select
+
+End Function
+
+
+Public Function SoloNum(strTel As String, Optional intYLetras As Integer = False) As String
+    'Devuelve un string con solo los números del string pasado (para buscar teléfonos)
+    On Error GoTo Error_SoloNum
+    Dim i As Integer, stRes As String, st1 As String
+    For i = 1 To Len(strTel)
+        If IsNumeric(Mid(strTel, i, 1)) Then
+            stRes = stRes & Mid(strTel, i, 1)
+        ElseIf intYLetras Then
+            st1 = UCase(Mid(strTel, i, 1))
+            If st1 >= "A" And st1 <= "Z" Then
+                stRes = stRes & Mid(strTel, i, 1)
+            End If
+        End If
+    Next i
+Salir_SoloNum:
+    SoloNum = stRes
+    Exit Function
+Error_SoloNum:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en SoloNum" & vbCrLf & Err.Description
+            Resume Salir_SoloNum
+    End Select
+End Function

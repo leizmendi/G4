@@ -84,8 +84,8 @@ Public Function OrderImportar(lIdOrder As Long, lIdCli As Long) As Boolean
         GoTo HandleExit
     End If
     lNumPedido = Nz(DMax("NumPedido", "tbPedidosCab"), 0) + 1
-    sEntrega = rsO("email") & " - " & rsO("telephone") _
-            & vbCrLf & Trim(rsO("payment_address_1") & " " & rsO("payment_address_2")) & " " & rsO("payment_city")
+    sEntrega = Trim(rsO("payment_address_1") & " " & rsO("payment_address_2")) & " " & rsO("payment_city") _
+             & vbCrLf & rsO("email") & " - " & rsO("telephone")
     sEntrega = Replace(Replace(sEntrega, """", ""), "'", "")
     sNotas = Nz(rsO("comment"), "")
     sSQL = "INSERT INTO tbPedidosCab(IdCliente, NumPedido, FechaRegistro, Notas, DireccionEntrega, idOrder)" _
@@ -120,7 +120,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
 End Function
 
 Public Function CustomerEnlazar(lcustomer_id As Long) As Boolean

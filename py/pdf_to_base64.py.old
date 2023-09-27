@@ -1,0 +1,23 @@
+"""
+    Convierte el archivo pdf2b64.pdf que debe estar en la carpeta del script
+    en base 64 que y se guarda en pdf2b64.txt en la misma carpeta
+"""
+import base64
+from pathlib import Path
+import os 
+
+# Ruta del archivo PDF
+pdf_file_path = os.path.dirname(__file__) + '\\pdf2b64.pdf'
+
+# Abre el archivo PDF en modo lectura binaria
+with open(pdf_file_path, 'rb') as pdf_file:
+     # Lee el archivo completo
+    pdf_content = pdf_file.read()
+
+    # Codifica el contenido del PDF a base64
+    pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+
+
+# Ruta del archivo de texto donde deseas guardar el string
+    archivo_texto = Path(os.path.dirname(__file__) + '\\pdf2b64.txt')
+    archivo_texto.write_text(pdf_base64)

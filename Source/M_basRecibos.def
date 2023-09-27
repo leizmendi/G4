@@ -1,0 +1,121 @@
+Option Compare Database
+Option Explicit
+
+Public Function AddReciboFromFacturaToRemesa(lIdFacturaCab As Long, lIdReciboEmision As Long, Optional sConcepto As String = "") As Boolean
+    On Error GoTo HandleError
+    Dim sSQL As String, lNumRecibo As Long, iR As Integer, sNumFac As String, rsCli As Recordset, rsR As Recordset, lIdCli As Long, sCuentaBancaria As String, sCli As String
+    Dim cImporte As Currency, dtFM As Date, sRM As String
+    If Nz(DLookup("IdentificacionFichero", "tbRecibosEmisiones", "IdReciboEmision = " & lIdReciboEmision), 0) <> 0 Then
+        MsgBox "La Remesa Nº " & lIdReciboEmision & " ya está generada, se debe poder modificar para incluir nuevos recibos", vbExclamation
+        GoTo HandleExit
+    End If
+    sNumFac = Nz(DLookup("NumFactura", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), "")
+    If sNumFac = "" Then
+        MsgBox "No se encontró Factura con Id = " & lIdFacturaCab, vbExclamation
+        GoTo HandleExit
+    End If
+    cImporte = Nz(DLookup("Importe", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), 0)
+    If cImporte = 0 Then
+        MsgBox "El importe de la factura " & sNumFac & " es 0, no se emitirá recibo", vbExclamation
+        GoTo HandleExit
+    End If
+    lIdCli = Nz(DLookup("IdCliente", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), 0)
+    If lIdCli = 0 Then
+        MsgBox "No se encontró Cliente de la Factura " & sNumFac, vbExclamation
+        GoTo HandleExit
+    End If
+    Set rsCli = CurrentDb.OpenRecordset("SELECT * FROM tbClientes WHERE IdCliente = " & lIdCli, dbOpenSnapshot)
+    If rsCli.EOF Then
+        MsgBox "No se encontró registro de Cliente Id= " & lIdCli, vbExclamation
+        GoTo HandleExit
+    End If
+    sCli = DimeCliente(lIdCli)
+    sCuentaBancaria = rsCli("CuentaBancaria")
+    If Len(sCuentaBancaria) <> 24 Then
+        MsgBox "La cuenta bancaria del cliente " & sCli & " no está completa: (" & sCuentaBancaria & ")", vbExclamation
+        GoTo HandleExit
+    End If
+    dtFM = Nz(rsCli("FechaMandato"), 0)
+    If dtFM = 0 Then
+        dtFM = Date
+        sSQL = "UPDATE tbClientes SET FechaMandato = " & CLng(dtFM) & " WHERE IdCliente = " & lIdCli
+        CurrentDb.Execute sSQL, dbFailOnError
+    End If
+    sRM = Nz(rsCli("ReferenciaMandato"), "")
+    If sRM = "" Then
+        sRM = CStr(lIdCli)
+        sSQL = "UPDATE tbClientes SET ReferenciaMandato = " & ConComillas(sRM) & " WHERE IdCliente = " & lIdCli
+        CurrentDb.Execute sSQL, dbFailOnError
+    End If
+    lNumRecibo = Nz(DLookup("NumRecibo", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), 0)
+    If lNumRecibo <> 0 Then
+        iR = MsgBox("La factura " & sNumFac & " ya se emitió el recibo Nº " & lNumRecibo & vbCrLf & "¿Volver a generar un recibo para la misma factura?", vbYesNo + vbQuestion)
+        If iR = vbNo Then GoTo HandleExit
+    End If
+    lNumRecibo = Nz(DMax("NUMRECIBO", "tbRecibos"), 0) + 1
+    Set rsR = CurrentDb.OpenRecordset("tbRecibos", dbOpenDynaset, dbAppendOnly)
+    rsR.AddNew
+    rsR("IdCliente") = lIdCli
+    rsR("ENTIDAD") = Mid(sCuentaBancaria, 5, 4)
+    rsR("OFICINA") = Mid(sCuentaBancaria, 9, 4)
+    rsR("CODREF") = rsCli("NIF")
+    rsR("NIF_O") = GetParam("OrdenanteNIF")
+    rsR("SUFIJO_O") = GetParam("OrdenanteSUFIJO")
+    sCli = Replace(sCli, vbCr, " ")
+    sCli = Replace(sCli, vbLf, " ")
+    rsR("Nombre") = Left(sCli, 40)
+    rsR("DIGCONT") = Mid(sCuentaBancaria, 13, 2)
+    rsR("NUMCUENTA") = Mid(sCuentaBancaria, 15)
+    rsR("CuentaIBAN") = sCuentaBancaria
+    rsR("IMPORTE") = cImporte
+    rsR("CONCEPTO") = IIf(sConcepto = "", "Fact. " & sNumFac, sConcepto)
+    rsR("NUMRECIBO") = lNumRecibo
+    rsR("IdReciboEmision") = lIdReciboEmision
+    'rsR("CIF_Cliente") = rsCli("NIF")
+    rsR("FechaMandato") = dtFM
+    rsR("ReferenciaMandato") = sRM
+    
+    rsR.Update
+    sSQL = "UPDATE tbFacturasCab SET NumRecibo = " & lNumRecibo & " WHERE IdFacturaCab = " & lIdFacturaCab
+    CurrentDb.Execute sSQL, dbFailOnError
+    PonTotalesRemesa lIdReciboEmision
+    AddReciboFromFacturaToRemesa = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function PonTotalesRemesa(lIdReciboEmision As Long) As Boolean
+    On Error GoTo HandleError
+    Dim iNumRecibos As Integer, cTotal As Currency, sSQL As String
+    iNumRecibos = Nz(DCount("NUMRECIBO", "tbRecibos", "IdReciboEmision = " & lIdReciboEmision), 0)
+    cTotal = Nz(DSum("IMPORTE", "tbRecibos", "IdReciboEmision = " & lIdReciboEmision), 0)
+    sSQL = "UPDATE tbRecibosEmisiones SET NumRecibos = " & iNumRecibos & ", TotalImporte = " & ComaPunto(cTotal) _
+        & " WHERE IdReciboEmision = " & lIdReciboEmision
+    CurrentDb.Execute sSQL, dbFailOnError
+    PonTotalesRemesa = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DelRecibo(lNumRecibo As Long) As Boolean
+    On Error GoTo HandleError
+    Dim sSQL As String, lIdReciboEmision As Long
+    lIdReciboEmision = DLookup("IdReciboEmision", "tbRecibos", "NUMRECIBO = " & lNumRecibo)
+    sSQL = "DELETE * FROM tbRecibos WHERE NUMRECIBO=" & lNumRecibo
+    CurrentDb.Execute sSQL, dbFailOnError
+    sSQL = "UPDATE tbFacturasCab SET NumRecibo = Null WHERE NumRecibo = " & lNumRecibo
+    CurrentDb.Execute sSQL, dbFailOnError
+    PonTotalesRemesa lIdReciboEmision
+    DelRecibo = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

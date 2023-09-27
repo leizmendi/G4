@@ -1,0 +1,30 @@
+Option Compare Database
+Option Explicit
+
+  Private Const Synchronize = &H100000
+  Private Const INFINITE = &HFFFF
+  Declare Function OpenProcess Lib "kernel32" (ByVal dwDesiredAccess As Long, _
+      ByVal bInheritHandle As Long, ByVal dwProcessId As Long) As Long
+  Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Declare Function WaitForSingleObject Lib "kernel32" (ByVal hHandle As Long, _
+      ByVal dwMilliseconds As Long) As Long
+  
+  Function WaitShell(AppName$, mode)
+  Dim hMod As Long, AppRoot As String
+  AppRoot = Left$(AppName$, InStr(AppName$ & " ", " "))
+  hMod = Shell(AppName$, mode)
+  If hMod <> 0 Then
+     WaitForTerm hMod
+  Else
+     MsgBox "No se pudo arrancar " & AppRoot
+  End If
+  End Function
+
+  Sub WaitForTerm(pid&)
+  Dim phnd&
+  phnd = OpenProcess(Synchronize, 0, pid)
+  If phnd <> 0 Then
+     Call WaitForSingleObject(phnd, INFINITE)
+     Call CloseHandle(phnd)
+  End If
+  End Sub

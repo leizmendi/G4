@@ -1,0 +1,20 @@
+Option Compare Database
+Option Explicit
+
+Public Declare Function ShellExecute _
+    Lib "shell32.dll" Alias "ShellExecuteA" ( _
+    ByVal hwnd As LongPtr, _
+    ByVal lpOperation As String, _
+    ByVal lpFile As String, _
+    ByVal lpParameters As String, _
+    ByVal lpDirectory As String, _
+    ByVal nShowCmd As Long) As Long
+
+
+Sub AbrirArchivoDesdeSO(rutaArchivo As String)
+    Dim ret As Long
+    ret = ShellExecute(0, "open", rutaArchivo, "", "", 1)
+    If ret <= 32 Then
+        MsgBox "No se pudo abrir el archivo."
+    End If
+End Sub

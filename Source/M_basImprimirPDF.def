@@ -1,0 +1,211 @@
+Option Compare Database
+Option Explicit
+
+Public Sub PrintReportAsPDF(strRPT As String, strWHERE As String, strOutFilePDF As String, strTitulo As String, Optional intMarcaAgua As Integer, Optional strXMLmarcaAgua As String, Optional intShowPDF As Integer = True, Optional strOpenArgs As String = "", Optional intConfirmOverwrite As Integer = 88)
+    On Error GoTo Error_PrintReportAsPDF
+    Dim pdf_printer_name As String
+    Dim pdf_printer_index As Integer
+    Dim current_printer_name As String
+    Dim current_printer_index As Integer
+    Dim i As Integer
+    Dim progid As String
+    Dim xmldom As Object
+    Dim currentdir As String
+    Dim pdfwriter As Object
+    
+    Rem -- Get the directory of the database
+    currentdir = GetFolder
+    
+    Rem -- Read the info xml
+    Set xmldom = CreateObject("MSXML.DOMDocument")
+    xmldom.Load (currentdir & "\infoPDF.xml")
+    
+    Rem -- Get the program id of the automation object.
+    progid = xmldom.SelectSingleNode("/xml/progid").Text
+
+    Rem -- Create the printer automation object
+    Set pdfwriter = CreateObject(progid)
+
+    Rem -- Printer specific settings
+    pdf_printer_name = pdfwriter.GetPrinterName
+    
+    Rem -- Find the index of the printer that we want to use
+    pdf_printer_index = -1
+    current_printer_index = -1
+    current_printer_name = Application.Printer.DeviceName
+    For i = 0 To Application.Printers.Count - 1
+        If Application.Printers.Item(i).DeviceName = pdf_printer_name Then
+            pdf_printer_index = i
+        End If
+        'If Application.Printers.Item(i).DeviceName = "Samsung ML-2010 Series" Then 'current_printer_name Then
+        If Application.Printers.Item(i).DeviceName = current_printer_name Then
+            current_printer_index = i
+        End If
+    Next
+    
+    Rem -- Exit here if the pdf printer was not found
+    If pdf_printer_index = -1 Then
+        MsgBox "The printer '" & pdf_printer_name & "' was not found on this computer."
+        Exit Sub
+    End If
+    
+    Rem -- Exit here if the current printer was not found
+    If current_printer_index = -1 Then
+        MsgBox "The current printer '" & current_printer_name & "' was not found on this computer." & _
+            " Without this printer the code will not be able to restore the original printer selection."
+        Exit Sub
+    End If
+    
+    Rem -- Set the printer
+    Application.Printer = Application.Printers(pdf_printer_index)
+    'Crear la carpeta de salida si no existe
+    CrearCarpetaSiNoExiste strOutFilePDF
+    
+    Rem -- Configure the PDF printer
+    With pdfwriter
+        Rem -- Set the destination file name of the PDF document
+        .SetValue "output", strOutFilePDF
+        
+        Rem -- Control the dialogs when printing
+        If intConfirmOverwrite = 88 Then intConfirmOverwrite = Not Nz(DameValorParam("FacturasPDFSobreescribirSN"), False)
+        If intConfirmOverwrite Then
+            .SetValue "ConfirmOverwrite", "yes"
+        Else
+            .SetValue "ConfirmOverwrite", "no"
+        End If
+        .SetValue "ShowSaveAS", "never"
+        .SetValue "ShowSettings", "never"
+        .SetValue "ShowPDF", IIf(intShowPDF = True, "yes", "never")
+        
+        Rem -- Set document properties
+        .SetValue "Target", "printer"
+        .SetValue "TargetFormat", "PDF"
+        .SetValue "Title", strTitulo
+        .SetValue "Subject", "Factura generada el:  " & Now
+        
+        Rem -- Display page thumbs when the document is opened
+        '.SetValue "UseThumbs", "yes"
+        
+        Rem -- Set the zoom factor to 50%
+        .SetValue "Zoom", "50"
+        
+        Rem -- Place a stamp in the lower right corner
+        If intMarcaAgua = True Then
+            .SetValue "WatermarkText", Nz(DimeXML(strXMLmarcaAgua, "WaterMarkText"), "ACCESS DEMO")
+            .SetValue "WatermarkVerticalPosition", Nz(DimeXML(strXMLmarcaAgua, "WatermarkVerticalPosition"), "middle")
+            .SetValue "WatermarkHorizontalPosition", Nz(DimeXML(strXMLmarcaAgua, "WatermarkHorizontalPosition"), "center")
+            .SetValue "WatermarkVerticalAdjustment", Nz(DimeXML(strXMLmarcaAgua, "WatermarkVerticalAdjustment"), "3")
+            .SetValue "WatermarkHorizontalAdjustment", Nz(DimeXML(strXMLmarcaAgua, "WatermarkHorizontalAdjustment"), "1")
+            .SetValue "WatermarkRotation", Nz(DimeXML(strXMLmarcaAgua, "WatermarkRotation"), "45")
+            .SetValue "WatermarkColor", Nz(DimeXML(strXMLmarcaAgua, "WatermarkColor"), "#ff00FF")
+            .SetValue "WatermarkOutlineWidth", Nz(DimeXML(strXMLmarcaAgua, "WatermarkOutlineWidth"), "1")
+        End If
+        
+        Rem -- Write the settings to the runonce.ini file
+        .WriteSettings True
+    End With
+        
+    
+    Rem -- Run the report
+    PonXML strOpenArgs, "PDFsn", "S"
+    DoCmd.OpenReport strRPT, , , strWHERE, , strOpenArgs
+    
+Salir_PrintReportAsPDF:
+    Application.Printer = Application.Printers(current_printer_index)
+    Exit Sub
+Error_PrintReportAsPDF:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en PrintReportAsPDF" & vbCrLf & Err.Description
+            Resume Salir_PrintReportAsPDF
+    End Select
+End Sub
+
+Function GetFolder(Optional ByVal strFile As String = "") As String
+    Dim retv As String
+    Dim p As Integer
+    If strFile = "" Then
+        retv = Application.CurrentDb.Name
+    Else
+        retv = strFile
+    End If
+    p = InStrRev(retv, "\")
+    If p > 0 Then
+        retv = Left(retv, p)
+        If Right(retv, 1) = "\" Then retv = Left(retv, Len(retv) - 1)
+    Else
+        Err.Raise 1000, , "Unable to determine database folder"
+    End If
+    GetFolder = retv
+End Function
+
+
+
+Public Function CrearCarpetaSiNoExiste(ByVal strFileOut As String) As Integer
+    On Error GoTo Error_CrearCarpetaSiNoExiste
+    Dim strCarpeta As String
+    strCarpeta = GetFolder(strFileOut)
+    If Dir(strCarpeta, vbDirectory) = "" Then
+        If CrearCarpetaSiNoExiste(strCarpeta) = True Then MkDir strCarpeta
+    End If
+    CrearCarpetaSiNoExiste = True
+Salir_CrearCarpetaSiNoExiste:
+    Exit Function
+Error_CrearCarpetaSiNoExiste:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en CrearCarpetaSiNoExiste" & vbCrLf & Err.Description
+            Resume Salir_CrearCarpetaSiNoExiste
+    End Select
+End Function
+
+
+Sub PrintReport(strRPT As String, Optional strPrinter_name As String = "", Optional intView As Integer = acViewNormal, Optional strWHERE As String = "", Optional strOpenArgs As String = "")
+    On Error GoTo Error_PrintReport
+    Dim intPrinter_index As Integer
+    Dim strCurrent_printer_name As String
+    Dim intCurrent_printer_index As Integer
+    Dim i As Integer
+    
+    
+    Rem -- Find the index of the printer that we want to use
+    intPrinter_index = -1
+    intCurrent_printer_index = -1
+    strCurrent_printer_name = Application.Printer.DeviceName
+    If strPrinter_name = "" Then strPrinter_name = strCurrent_printer_name
+    For i = 0 To Application.Printers.Count - 1
+        If Application.Printers.Item(i).DeviceName = strPrinter_name Then
+            intPrinter_index = i
+        End If
+        If Application.Printers.Item(i).DeviceName = strCurrent_printer_name Then
+            intCurrent_printer_index = i
+        End If
+    Next
+    
+    Rem -- Exit here if the pdf printer was not found
+    If intPrinter_index = -1 Then
+        MsgBox "La impresora '" & strPrinter_name & "' no se encontró en este ordenador."
+        Exit Sub
+    End If
+    
+    Rem -- Exit here if the current printer was not found
+    If intCurrent_printer_index = -1 Then
+        MsgBox "La impresora predeterminada '" & strCurrent_printer_name & "' no se encontró en este ordenador." & _
+            " Without this printer the code will not be able to restore the original printer selection."
+        Exit Sub
+    End If
+    
+    Rem -- Set the printer
+    Application.Printer = Application.Printers(intPrinter_index)
+    DoCmd.OpenReport strRPT, intView, , strWHERE, , strOpenArgs
+    
+Salir_PrintReport:
+    Application.Printer = Application.Printers(intCurrent_printer_index)
+    Exit Sub
+Error_PrintReport:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en PrintReport" & vbCrLf & Err.Description
+            Resume Salir_PrintReport
+    End Select
+End Sub

@@ -1,0 +1,750 @@
+
+Option Compare Database
+Option Explicit
+
+Enum FirmaDocStatus
+    Created = 100
+    SentToDevice = 200
+    Signed = 300
+    RemovedFromDevice = 400
+    Rejected = 500
+    UnexpectedError = 600
+    Delivered = 700
+    DeviceError = 800
+    CancelledBySender = 900
+    Expired = 100
+End Enum
+
+Private Const BASE_URL As String = "https://restapi.firmar.online/SignFromApp/v40/"
+
+Public Function DocStatusTxt(iStatus As FirmaDocStatus) As String
+    Dim sR As String
+    Select Case iStatus
+        Case Created: sR = "Created"
+        Case SentToDevice: sR = "SentToDevice"
+        Case Signed: sR = "Signed"
+        Case RemovedFromDevice: sR = "RemovedFromDevice"
+        Case Rejected: sR = "Rejected"
+        Case UnexpectedError: sR = "UnexpectedError"
+        Case Delivered: sR = "Delivered"
+        Case DeviceError: sR = "DeviceError"
+        Case CancelledBySender: sR = "CancelledBySender"
+        Case Expired: sR = "Expired"
+        Case Else: sR = "Estado desconocido"
+    End Select
+    DocStatusTxt = sR
+        
+End Function
+
+Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
+                                       , Optional sDispositivoId As String = "" _
+                                       , Optional ByRef sIdDoc As String = "" _
+                                       , Optional ByRef sFolDocId As String) As Boolean
+    'Envia PDF del albarán al dispositivo para la firma
+    'Caso de ir todo bien devuelve el DocumentId generado
+    On Error GoTo HandleError
+    'Generar PDF del albarán
+    Dim sFilePDF As String, sCarpeta As String, dtIni As Date, dtNow As Date
+    Dim bR As Boolean, sCurrentDir As String
+    sCarpeta = Nz(GetParam("CarpetaAlbaranesPDF"), "AlbaranesPDF")
+    sCurrentDir = DirectorioDe(CurrentDb.Name)
+    If Right(sCarpeta, 1) <> "\" Then sCarpeta = sCarpeta & "\"
+    
+    sFilePDF = sCarpeta & AlbaranFilePDF(lIdAlbECab)
+    On Error Resume Next
+    Kill sFilePDF
+    On Error GoTo HandleError
+    PrintReportAsPDF "rptAlbaran", "IdAlbaranECab = " & lIdAlbECab, sFilePDF, TituloAlbaran(lIdAlbECab), , , False
+    'Espera hasta encontrar el PDF generado
+    If Dir(sFilePDF) = "" Then
+        dtIni = Now()
+        DoCmd.Hourglass True
+        While Dir(sFilePDF) = ""
+            DoEvents
+            dtNow = Now()
+            If DateDiff("s", dtIni, dtNow) > 30 Then
+                DoCmd.Hourglass False
+                MsgBox "No se encontró PDF del albarán generado", vbExclamation
+                GoTo HandleExit
+            End If
+        Wend
+        DoCmd.Hourglass False
+    End If
+    Dim sDeviceId As String _
+        , sDocumentName As String _
+        , sB64PDFContent As String _
+        , sDescription As String _
+        , sTextoAMostrar As String _
+        , iFontSize As Integer _
+        , lBoxWidth As Long _
+        , lBoxHeight As Long _
+        , iBoxPage As Integer _
+        , lBoxX As Long _
+        , lBoxY As Long _
+        , bAutoOpen As Boolean
+    Dim sResponse As String
+    'sB64PDFContent = ConvertirPDFaBase64(sFilePDF, sCurrentDir)
+    sB64PDFContent = ConvertBinaryToBase64(sFilePDF)
+    sDeviceId = IIf(sDispositivoId = "", Nz(GetParam("FolDeviceId"), ""), sDispositivoId)
+    If sDeviceId = "" Then
+        MsgBox "Se debe indicar dispositivo de firma predeterminado", vbExclamation
+        GoTo HandleExit
+    End If
+    sDocumentName = AlbaranFilePDF(lIdAlbECab)
+    sDescription = TituloAlbaran(lIdAlbECab)
+    sIdDoc = "IdAlbaranECab_" & CStr(lIdAlbECab)
+    Dim iC As Integer, sMsg As String, iR As Integer, i As Integer
+    iC = Nz(DCount("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento like '" & sIdDoc & "*'"), 0)
+    
+    If iC > 0 Then
+        sMsg = "Ya se ha enviado el albarán anteriormente " & IIf(iC > 1, " " & iC & " veces", "") & vbCrLf & "¿Volver a enviarlo?"
+        iR = MsgBox(sMsg, vbOKCancel + vbQuestion)
+        If iR = vbCancel Then GoTo HandleExit
+        While Not IsNull(DLookup("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento = '" & sIdDoc & "_" & i & "'"))
+            i = i + 1
+            If i > 10 Then
+                MsgBox "Se ha enviado 10 veces!!!?", vbExclamation
+                GoTo HandleExit
+            End If
+        Wend
+        sIdDoc = sIdDoc & "_" & i
+    End If
+        
+    sTextoAMostrar = Nz(GetParam("FolBoxTexto"), "Firma: ")
+    lBoxWidth = Nz(GetParam("FolBoxAncho"), 200)
+    lBoxHeight = Nz(GetParam("FolBoxAlto"), 50)
+    lBoxX = Nz(GetParam("FolBoxX"), 50)
+    lBoxY = Nz(GetParam("FolBoxY"), 350)
+    iFontSize = Nz(GetParam("FolBoxFontSize"), 4)
+    bR = PostDocument(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc _
+                             , sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, 1, lBoxX, lBoxY, False, sResponse)
+    'MsgBox sResponse, vbInformation
+    If bR Then sFolDocId = Replace(sResponse, """", "")
+    EnviaAlbaranADispositivo = bR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Private Function PostDocument_OLD(sDeviceId As String _
+                            , sDocumentName As String _
+                            , sB64PDFContent As String _
+                            , sDescription As String _
+                            , sIdDoc As String _
+                            , Optional sTextoAMostrar As String = "Firma: " _
+                            , Optional iFontSize As Integer = 4 _
+                            , Optional lBoxWidth As Long = 200 _
+                            , Optional lBoxHeight As Long = 50 _
+                            , Optional iBoxPage As Integer = 1 _
+                            , Optional lBoxX As Long = 50 _
+                            , Optional lBoxY As Long = 350 _
+                            , Optional bAutoOpen As Boolean _
+                            , Optional ByRef sResponse As String) As Boolean
+
+    On Error GoTo HandleError
+    Dim oHttp As MSXML2.XMLHTTP60
+    Dim sJSON As String
+    Dim bR As Boolean
+    
+    Set oHttp = New MSXML2.XMLHTTP60
+    ''' Ejemplo:
+    ' Preparamos los datos en formato JSON
+    sJSON = "{""deviceId"": """ & sDeviceId & """, " & _
+            """document"": {""name"": """ & sDocumentName & """, " & _
+            """b64PDFContent"": """ & sB64PDFContent & """, " & _
+            """description"": """ & sDescription & """, ""id"": """ & sIdDoc & """}, " & _
+            """widget"": {""customText"": [{""text"": """ & Replace(sTextoAMostrar, """", "'") & """, ""fontSize"": " & iFontSize & "}], " & _
+            """width"": " & lBoxWidth & ", ""height"": " & lBoxHeight & ", ""page"": " & iBoxPage & ", ""x"": " & lBoxX & ", ""y"": " & lBoxY & "}, " & _
+            """autoOpen"": " & IIf(bAutoOpen, "true", "false") & "}"
+    With oHttp
+        .Open "POST", BASE_URL & "Document", False
+        .setRequestHeader "Content-Type", "application/json"
+        .setRequestHeader "Api-Key", "" & API_KEY()
+
+        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
+        .Send sJSON
+        If .Status = 201 Then
+            MsgBox "Documento enviado para la firma, ID: " & Replace(.responseText, """", "")
+            ' Trata la respuesta aquí. Puedes usar .responseText para obtener la respuesta en formato texto.
+            bR = True
+        Else
+            MsgBox "Error: " & .Status & " " & .statusText
+        End If
+    End With
+    sResponse = oHttp.responseText
+    Set oHttp = Nothing
+    PostDocument_OLD = bR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Private Function GetDevices() As String
+
+    On Error GoTo HandleError
+    Dim oHttp As MSXML2.XMLHTTP60
+    Dim sJSON As String, sURL As String
+    
+    Set oHttp = New MSXML2.XMLHTTP60
+    sURL = BASE_URL & "Devices?rand=" & Rnd()
+    With oHttp
+        .Open "GET", sURL, False
+        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
+        .setRequestHeader "Api-Key", "" & API_KEY()
+
+        .Send
+        If .Status = 200 Then
+            ' Trata la respuesta aquí. Puedes usar .responseText para obtener la respuesta en formato texto.
+        Else
+            MsgBox "Error: " & .Status & " " & .statusText
+        End If
+    End With
+    Dim sResponse As String
+    sResponse = oHttp.responseText
+    Set oHttp = Nothing
+    GetDevices = sResponse
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function GetDocument(sDocumentId As String) As String
+
+    On Error GoTo HandleError
+    Dim oHttp As MSXML2.XMLHTTP60
+    Dim sJSON As String
+    
+    Set oHttp = New MSXML2.XMLHTTP60
+    With oHttp
+        .Open "GET", BASE_URL & "Document/" & sDocumentId & "?rnd=" & Rnd(), False
+        .setRequestHeader "Api-Key", "" & API_KEY()
+
+        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
+        .Send
+        If .Status = 200 Then
+            ' Trata la respuesta aquí. Puedes usar .responseText para obtener la respuesta en formato texto.
+        Else
+            MsgBox "Error: " & .Status & " " & .statusText
+            GoTo HandleExit
+        End If
+    End With
+    Dim sResponse As String
+    Dim pdfFilePath As String, sCurrentDir As String, sB64Text As String
+    Dim command As String
+    Const PDFFILE = "b64_to_pdf.pdf", B64FILE = "b64_to_pdf.txt"
+    sResponse = oHttp.responseText
+    Set oHttp = Nothing
+    
+    'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function API_KEY() As String
+    API_KEY = GetParam("FolAPIKey")
+End Function
+
+
+Function GetDevices_RowSource(ByRef oDevs As Object) As String
+    Dim sDevicesJson  As String, key As Variant, sDescripcion As String, sR As String
+    sDevicesJson = GetDevices
+    Set oDevs = ParseJson(sDevicesJson)
+    For Each key In oDevs
+        sR = sR & ";" & CStr(key) & ";" & oDevs(CStr(key))
+    Next key
+    If Len(sR) > 1 Then sR = Mid(sR, 2)
+    GetDevices_RowSource = sR
+    
+End Function
+
+Public Function GetDocumentStatus(documentId As String, Optional ByRef dtSigned As Date) As String
+
+    Dim oHttp As MSXML2.XMLHTTP60, sR As String
+    Set oHttp = New MSXML2.XMLHTTP60
+    
+    With oHttp
+        .Open "GET", BASE_URL & "Document/Status/" & documentId & "?rnd=" & Rnd(), False
+        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
+        .setRequestHeader "Api-Key", "" & API_KEY()
+
+        .Send
+        If .Status = 200 Then
+            GetDocumentStatus = DocStatusTxt(CInt(.responseText))
+            If CInt(.responseText) = 300 Then
+                dtSigned = getDocumentSignedDate(documentId)
+            End If
+        Else
+            MsgBox "Error: " & .Status & " " & .statusText
+            GetDocumentStatus = ""
+        End If
+    End With
+    
+    Set oHttp = Nothing
+End Function
+
+Private Function getDocumentSignedDate(documentId As String) As Date
+
+    On Error GoTo HandleError
+    Dim oHttp As MSXML2.XMLHTTP60, jsonArr As Object, item As Object
+    Set oHttp = New MSXML2.XMLHTTP60
+    
+    With oHttp
+        .Open "GET", BASE_URL & "Document/AuditTrail/" & documentId & "?rnd=" & Rnd(), False
+        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
+        .setRequestHeader "Api-Key", "" & API_KEY()
+
+        .Send
+        If .Status = 200 Then
+            Set jsonArr = ParseJson(.responseText)
+            For Each item In jsonArr
+                If item("eventType") = 300 Then
+                    getDocumentSignedDate = CDate(Replace(Left(item("eventDateTime"), 19), "T", " "))
+                    Exit For
+                End If
+            Next item
+        Else
+            MsgBox "Error: " & .Status & " " & .statusText
+            getDocumentSignedDate = 0
+        End If
+    End With
+    
+    Set oHttp = Nothing
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume 'HandleExit
+End Function
+
+Function RetrieveSignedDocument(documentId As String, ByRef bResponse() As Byte, ByRef sMsg As String) As Boolean
+    On Error GoTo HandleError
+    Dim url As String
+    Dim http As MSXML2.ServerXMLHTTP60 ' Object
+    Dim jsonResponse As Object
+    
+    ' Construye el URL completo
+    url = BASE_URL & "Document/" & documentId
+    
+    ' Crea el objeto para la solicitud
+    Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    
+    ' Hace la solicitud GET
+    With http
+        .Open "GET", url, False
+        '.setRequestHeader "Content-Type", "application/json"
+        ' Si tu API requiere encabezados adicionales, agrégales aquí
+        ' http.setRequestHeader "Authorization", "Bearer YOUR_TOKEN"
+        .setRequestHeader "Api-Key", "" & API_KEY()
+    
+        .Send ""
+    End With
+    ' Maneja la respuesta
+    Select Case http.Status
+        Case 200
+            RetrieveSignedDocument = True
+            bResponse = http.responseBody
+            sMsg = "OK"
+            'ClipBoard_SetText sResponse
+            'Debug.Print Len(sResponse), Left(sResponse, 100)
+        Case 403
+            ' Documento no finalizado
+            Set jsonResponse = ParseJson(http.responseText)
+            RetrieveSignedDocument = False
+            sMsg = "Error 403: " & jsonResponse("detail")
+        Case 404
+            ' Documento no existe
+            Set jsonResponse = ParseJson(http.responseText)
+            RetrieveSignedDocument = False
+            sMsg = "Error 404: " & jsonResponse("detail")
+        Case Else
+            ' Otros errores
+            RetrieveSignedDocument = False
+            sMsg = "Error: " & http.Status & " - " & http.statusText
+    End Select
+    Set http = Nothing
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume 'HandleExit
+End Function
+
+' Necesitas una función para parsear JSON si quieres obtener detalles de los errores
+' Por ejemplo, puedes usar una biblioteca como JSONConverter para parsear respuestas JSON en VBA
+' Puedes obtenerla en: https://github.com/VBA-tools/VBA-JSON
+
+
+Public Function ConvertirPDFaBase64_old_python(sFilePDF As String, sOutputFolder As String) As String
+    'Utiliza un script en Python para hacer la conversión
+    'Se hace una copia del pdf a convertir a sOutputFolder\pdf2b64.pdf
+    'y se llama al script pasándole el parámetro de la carpeta de salida
+    On Error GoTo HandleError
+    Const PDFFILE = "pdf2b64.pdf", B64FILE = "pdf2b64.txt"
+    Dim sScriptName As String, sTempOutFile As String
+    
+    'sCurrentDir = DirectorioDe(CurrentDb.Name)
+    On Error Resume Next
+    Kill sOutputFolder & PDFFILE
+    Kill sOutputFolder & B64FILE
+    On Error GoTo HandleError
+    FileCopy sFilePDF, sOutputFolder & PDFFILE
+    
+    sScriptName = "pdf_to_base64.py"
+    sOutputFolder = Replace(sOutputFolder, "\", "/")
+    sTempOutFile = sOutputFolder & "temp.txt"
+    If ScriptPython(sScriptName, sTempOutFile, CVar(sOutputFolder)) = True Then
+        Dim Archivo As Integer, sRet As String
+        'Dim RutaArchivo As String
+        ' Abre el archivo en modo lectura
+        Archivo = FreeFile
+        Open sTempOutFile For Input As Archivo
+        ' Lee todo el contenido en una sola cadena
+        sRet = Input$(LOF(Archivo), Archivo)
+        ' Cierra el archivo
+        Close Archivo
+        'Kill sTempOutFile
+        ConvertirPDFaBase64_old_python = sRet
+    Else
+        MsgBox "no se pudo convertir PDF a Base64", vbExclamation
+    End If
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function ConvertirBase64aPDF(sFileTxt As String, sFilePDF As String) As Boolean
+    'Convierte un texto en Base64 a un pdf en la ruta y nombre parametrizado
+    'Utiliza un script en Python
+    
+    On Error GoTo HandleError
+    Dim iR As Integer ', sParams As String, vParams As Variant
+    If Dir(sFilePDF) <> "" Then
+        iR = MsgBox("El archivo " & sFilePDF & " ya existe, ¿quiere reemplazarlo?", vbOKCancel + vbQuestion)
+        If iR = vbCancel Then GoTo HandleExit
+        Kill sFilePDF
+    End If
+    
+    'Parámetros
+    'sParams = sFileTxt & "," & sFilePDF
+    'vParams = Split(sParams, ",")
+    ConvertirBase64aPDF = ScriptPython("base64_to_pdf.py", "", sFileTxt, sFilePDF)
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function ConvertirBase64aPDF_2(sBase64 As String, sFilePDF As String) As Boolean
+    'Convierte un texto en Base64 a un pdf en la ruta y nombre parametrizado
+    'Utiliza un script en Python
+    
+    On Error GoTo HandleError
+    Dim iR As Integer ', sParams As String, vParams As Variant
+    If Dir(sFilePDF) <> "" Then
+        iR = MsgBox("El archivo " & sFilePDF & " ya existe, ¿quiere reemplazarlo?", vbOKCancel + vbQuestion)
+        If iR = vbCancel Then GoTo HandleExit
+        Kill sFilePDF
+    End If
+    
+    'Parámetros
+    'sParams = sFileTxt & "," & sFilePDF
+    'vParams = Split(sParams, ",")
+    ConvertirBase64aPDF_2 = ScriptPython("base64_to_pdf_2.py", "", sBase64, sFilePDF)
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+
+Function EscapeJSONString(ByVal s As String) As String
+    Dim result As String
+    
+    result = s
+    ' Escapar backslashes
+    result = Replace(result, "\", "\\")
+    ' Escapar comillas dobles
+    'result = Replace(result, """", "\""")
+    ' Escapar otros caracteres de control
+    result = Replace(result, vbTab, "\t")
+    result = Replace(result, vbCrLf, "\n")
+    result = Replace(result, vbCr, "\r")
+    result = Replace(result, vbLf, "\n")
+    
+    EscapeJSONString = result
+End Function
+
+Function BuildJSON(ByVal sDeviceId As String, ByVal sDocumentName As String, ByVal sB64PDFContent As String, ByVal sDescription As String, ByVal sIdDoc As String, _
+                   ByVal sTextoAMostrar As String, ByVal iFontSize As Integer, ByVal lBoxWidth As Long, ByVal lBoxHeight As Long, ByVal iBoxPage As Integer, _
+                   ByVal lBoxX As Long, ByVal lBoxY As Long, ByVal bAutoOpen As Boolean) As String
+                   
+    sTextoAMostrar = Replace(sTextoAMostrar, """", "\""")
+
+    BuildJSON = "{""deviceId"": """ & sDeviceId & """, " & _
+                """document"": {""name"": """ & sDocumentName & """, " & _
+                """b64PDFContent"": """ & sB64PDFContent & """, " & _
+                """description"": """ & sDescription & """, ""id"": """ & sIdDoc & """}, " & _
+                """widget"": {""customText"": [{""text"": """ & sTextoAMostrar & """, ""fontSize"": " & iFontSize & "}], " & _
+                """width"": " & lBoxWidth & ", ""height"": " & lBoxHeight & ", ""page"": " & iBoxPage & ", ""x"": " & lBoxX & ", ""y"": " & lBoxY & "}, " & _
+                """autoOpen"": " & IIf(bAutoOpen, "true", "false") & "}"
+End Function
+
+Function PostDocument(ByVal sDeviceId As String, ByVal sDocumentName As String, ByVal sB64PDFContent As String, ByVal sDescription As String, ByVal sIdDoc As String, _
+                      ByVal sTextoAMostrar As String, ByVal iFontSize As Integer, ByVal lBoxWidth As Long, ByVal lBoxHeight As Long, ByVal iBoxPage As Integer, _
+                      ByVal lBoxX As Long, ByVal lBoxY As Long, ByVal bAutoOpen As Boolean, Optional ByRef sResponse As String) As Boolean
+    Dim oHttp As MSXML2.XMLHTTP60
+    Dim sJSON As String
+    Dim bR As Boolean
+    Dim it As Object, i As Integer, iR As Integer
+Ini:
+    sJSON = BuildJSON(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc, sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, iBoxPage, lBoxX, lBoxY, bAutoOpen)
+    sJSON = EscapeJSONString(sJSON)
+    Set oHttp = New MSXML2.XMLHTTP60
+    With oHttp
+        .Open "POST", BASE_URL & "Document", False
+        .setRequestHeader "Content-Type", "application/json"
+        .setRequestHeader "Api-Key", API_KEY()
+
+        On Error GoTo HandleError
+        .Send sJSON
+        If .Status = 400 Then
+            Set it = ParseJson(.responseText)
+            iR = MsgBox(it("detail") & vbCrLf & "¿Reenviar el documento con nuevo Id?", vbOKCancel + vbQuestion)
+            If iR = vbOK Then
+                i = i + 1
+                sIdDoc = sIdDoc & i
+                GoTo Ini
+            End If
+        End If
+        If .Status = 201 Then
+            ' Trata la respuesta aquí. Puedes usar .responseText para obtener la respuesta en formato texto.
+            bR = True
+        End If
+        sResponse = .responseText
+    End With
+
+    Set oHttp = Nothing
+    PostDocument = bR
+    Exit Function
+
+HandleError:
+    sResponse = "Error: " & oHttp.Status & " " & oHttp.statusText
+    Set oHttp = Nothing
+    PostDocument = False
+End Function
+
+Public Sub ActualizarEstadosAlbaran(IdAlbaranECab As Long)
+    On Error GoTo HandleError
+
+    Dim rs As DAO.Recordset
+    Dim db As DAO.Database
+    Dim strSQL As String
+    Dim documentId As String, lIdAD As Long
+    Dim Estado As String, dtSigned As Date
+    Dim sCPDF As String, sFilePDF As String
+
+    ' Abre la base de datos actual
+    Set db = CurrentDb()
+
+    ' Prepara la consulta SQL para obtener registros de tbAlbaranes_Dispositivo
+    ' que corresponden al IdAlbaranECab proporcionado
+    strSQL = "SELECT IdAlbaranDispositivo, FolDocumentId FROM tbAlbaranes_Dispositivo WHERE IdAlbaranECab = " & IdAlbaranECab
+
+    ' Abre el recordset
+    Set rs = db.OpenRecordset(strSQL, dbOpenSnapshot)
+
+    ' Recorre los registros
+    If Not rs.EOF Then
+        rs.MoveFirst
+        Do While Not rs.EOF
+            ' Obtiene el DocumentId del registro actual
+            documentId = rs("FolDocumentId")
+            lIdAD = rs("IdAlbaranDispositivo")
+            
+            ' Llama a la función para obtener el estado
+            Estado = GetDocumentStatus(documentId, dtSigned)
+            
+            ' Actualiza el campo Estado en la tabla tbAlbaranes_Dispositivo
+            strSQL = "UPDATE tbAlbaranes_Dispositivo SET Status = '" & Estado & "'"
+            If dtSigned <> 0 Then strSQL = strSQL & ", FechaFirmado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn") & "#"
+            strSQL = strSQL & " WHERE IdAlbaranDispositivo = " & lIdAD
+            CurrentDb.Execute strSQL, dbFailOnError
+            If dtSigned <> 0 Then
+                If Nz(DLookup("file_pdf", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAD), "") = "" Then
+                    'Marca la fecha de entrega del albarán
+                    strSQL = "UPDATE tbAlbaranesEnvioCab SET FechaEntregado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn") & "#" _
+                            & " WHERE IdAlbaranECab = " & IdAlbaranECab
+                    CurrentDb.Execute strSQL, dbFailOnError
+                    'Descarga el documento firmado
+                    sFilePDF = RecuperaAlbaranFirmado(documentId)
+                    If sFilePDF = "" Then
+                        MsgBox "No se pudo desgargar Albarán firmado", vbExclamation
+                    Else
+                        sCPDF = Nz(GetParam("CarpetaAlbaranesPDF"), "")
+                        If InStr(sFilePDF, sCPDF) <> 1 Then
+                            MsgBox "El albarán no se encuentra en la carpeta determinada para Albaranes PDF", vbExclamation
+                        Else
+                            sFilePDF = Mid(sFilePDF, Len(sCPDF) + 1)
+                            strSQL = "UPDATE tbAlbaranes_Dispositivo SET file_pdf = '" & sFilePDF & "'"
+                            strSQL = strSQL & " WHERE IdAlbaranDispositivo = " & lIdAD
+                            CurrentDb.Execute strSQL, dbFailOnError
+                            If EnviarAlbaranFirmadoXEmail(lIdAD) = True Then
+                                strSQL = "UPDATE tbAlbaranes_Dispositivo SET EmailSN = True" _
+                                        & " WHERE IdAlbaranDispositivo = " & lIdAD
+                                CurrentDb.Execute strSQL, dbFailOnError
+                                strSQL = "UPDATE tbAlbaranesEnvioCab SET EmailSN = True" _
+                                        & " WHERE IdAlbaranECab = " & IdAlbaranECab
+                                CurrentDb.Execute strSQL, dbFailOnError
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+                    
+            ' Mueve al siguiente registro
+            rs.MoveNext
+        Loop
+    End If
+
+    ' Cierra el recordset y libera recursos
+    rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+
+Public Function RecuperaAlbaranFirmado(sFolDocumentId As String) As String
+    On Error GoTo HandleError
+    'Recupera albaran firmado y lo guarda en la carpeta correspondiente
+    'Devuelve true si todo va bien y el path al archivo en sFilePDF
+    Dim bAlbPDF() As Byte, tempFileName As String, fileNumber As Integer, sFilePDF As String, lIdAlbECab As Long, sMsg As String
+    If RetrieveSignedDocument(sFolDocumentId, bAlbPDF, sMsg) = False Then
+        MsgBox sMsg, vbExclamation
+        GoTo HandleExit
+    End If
+    'Ver ruta y nombre del PDF a generar
+    Dim sCPDF As String
+    lIdAlbECab = Nz(DLookup("IdAlbaranECab", "tbAlbaranes_Dispositivo", "FolDocumentId = '" & sFolDocumentId & "'"), 0)
+    If lIdAlbECab = 0 Then
+        MsgBox "No se encontró Albaran en tbAlbaranes_Dispositivo con DocumentId = " & sFolDocumentId, vbExclamation
+        GoTo HandleExit
+    End If
+    sCPDF = Nz(GetParam("CarpetaAlbaranesPDF"), "")
+    If Right(sCPDF, 1) <> "\" Then sCPDF = sCPDF & "\"
+    sFilePDF = sCPDF & AlbaranFilePDF(lIdAlbECab, True)
+    If Dir(sFilePDF) <> "" Then
+        MsgBox "Ya existe el archivo " & sFilePDF & ", deberá eliminarse o cambiarse el nombre para su reemplazo", vbExclamation
+        GoTo HandleExit
+    End If
+    If GuardarBinario(sFilePDF, bAlbPDF) = True Then
+        RecuperaAlbaranFirmado = sFilePDF
+    End If
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function CancelDoc(sFolDocumentId As String, sStatusText As String) As String
+    On Error GoTo HandleError
+    'Cancela el documento
+    'Devuelve 204 si se cancela, 404 si no existe
+    Dim url As String
+    Dim http As MSXML2.ServerXMLHTTP60 ' Object
+    Dim jsonResponse As Object
+    
+    ' Construye el URL completo
+    url = BASE_URL & "Document/Cancel/" & sFolDocumentId
+    
+    ' Crea el objeto para la solicitud
+    Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    
+    ' Hace la solicitud GET
+    With http
+        .Open "PUT", url, False
+        .setRequestHeader "Api-Key", "" & API_KEY()
+        .Send ""
+    End With
+    ' Maneja la respuesta
+    sStatusText = http.statusText
+    CancelDoc = http.Status
+    Set http = Nothing
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function Fichero_a_string(sTempOutFile As String, Optional bBorrarFile As Boolean = True) As String
+    On Error GoTo HandleError
+    Dim stream As ADODB.stream, sRet As String
+    Set stream = New ADODB.stream 'CreateObject("ADODB.Stream")
+    stream.Type = 2 ' Text
+    stream.Charset = "utf-8"
+    stream.Open
+    stream.LoadFromFile sTempOutFile
+    sRet = stream.ReadText
+    stream.Close
+    If bBorrarFile Then Kill sTempOutFile
+    Fichero_a_string = sRet
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Function GuardarBinario(archivoDestino As String, bDatosBinarios() As Byte) As Boolean
+    On Error GoTo HandleError
+    Dim binaryStream As Object
+    Set binaryStream = CreateObject("ADODB.Stream")
+    
+    With binaryStream
+        .Type = 1 ' adTypeBinary
+        .Open
+        .Write bDatosBinarios
+        .SaveToFile archivoDestino, 2 ' adSaveCreateOverWrite
+        .Close
+    End With
+    
+    Set binaryStream = Nothing
+    
+    GuardarBinario = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function

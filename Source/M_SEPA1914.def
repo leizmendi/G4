@@ -1,0 +1,682 @@
+Option Compare Database
+Option Explicit
+
+Type DefinicionCabeceraPresentador
+    C01_CodigoRegistro As String * 2
+    C02_VersionCuaderno As String * 5
+    C03_NumeroDato As String * 3
+    C04_IdentificadorPresentador As String * 35
+    C05_NombrePresentador As String * 70
+    C06_FechaCreacionFichero As String * 8
+    C07_IdentificacionFichero As String * 35
+    C08_EntidadReceptora As String * 4
+    C09_Oficinareceptora As String * 4
+    C10_Libre As String * 434
+    CR As String * 2
+End Type
+
+Type DefinicionCabeceraAcreedorFechaCobro
+    C01_CodigoRegistro As String * 2
+    C02_VersionCuaderno As String * 5
+    C03_NumeroDato As String * 3
+    C04_IdentificadorAcreedor As String * 35
+    C05_FechaCobro As String * 8
+    C06_NombreAcreedor As String * 70
+    C07_DireccionAcreedor_D1 As String * 50
+    C08_DireccionAcreedor_D2 As String * 50
+    C09_DireccionAcreedor_D3 As String * 40
+    C10_PaisAcreedor As String * 2
+    C11_CuentaAcreedor As String * 34
+    C12_Libre As String * 301
+    CR As String * 2
+End Type
+    
+Type DefinicionRegistroIndividualObligatorio
+    C01_CodigoRegistro As String * 2
+    C02_VersionCuaderno As String * 5
+    C03_NumeroDato As String * 3
+    C04_ReferenciaAdeudo As String * 35
+    C05_ReferenciaMandato As String * 35
+    C06_TipoAdeudo As String * 4
+    C07_CategoriaProposito As String * 4
+    C08_ImporteAdeudo As String * 11
+    C09_FechaMandato As String * 8
+    C10_EntidadDeudor As String * 11
+    C11_NombreDeudor As String * 70
+    C12_DireccionDeudor_D1 As String * 50
+    C13_DireccionDeudor_D2 As String * 50
+    C14_DireccionDeudor_D3 As String * 40
+    C15_PaisDeudor As String * 2
+    C16_TipoIdentificacionDeudor As String * 1
+    C17_IdentificacionDeudorCodigo As String * 36
+    C18_IdentificacionDeudorEmisor As String * 35
+    C19_IdentificadorCuentaDeudor As String * 1
+    C20_CuentaDeudor As String * 34
+    C21_PropositoAdeudo As String * 4
+    C22_Concepto As String * 140
+    C23_Libre As String * 19
+    CR As String * 2
+End Type
+
+Type DefinicionTotalesAcreedorFechaCobro
+    C01_CodigoRegistro As String * 2
+    C02_IdentificadorAcreedor As String * 35
+    C03_FechaCobro As String * 8
+    C04_TotalImportes As String * 17
+    C05_NumeroAdeudos As String * 8
+    C06_TotalRegistros As String * 10
+    C07_Libre As String * 520
+    CR As String * 2
+End Type
+
+Type DefinicionTotalesAcreedor
+    C01_CodigoRegistro As String * 2
+    C02_IdentificadorAcreedor As String * 35
+    C03_TotalImportes As String * 17
+    C04_NumeroAdeudos As String * 8
+    C05_TotalRegistros As String * 10
+    C06_Libre As String * 528
+    CR As String * 2
+End Type
+
+Type DefinicionTotalGeneral
+    C01_CodigoRegistro As String * 2
+    C02_TotalImportesGeneral As String * 17
+    C03_NumeroRegistros As String * 8
+    C04_TotalRegistros As String * 10
+    C05_Libre As String * 563
+    CR As String * 2
+End Type
+
+Public RegistroCabeceraPresentador As DefinicionCabeceraPresentador
+Public RegistroCabeceraAcreedorFechaCobro As DefinicionCabeceraAcreedorFechaCobro
+Public RegistroIndividualObligatorio As DefinicionRegistroIndividualObligatorio
+Public RegistroTotalesAcreedorFechaCobro As DefinicionTotalesAcreedorFechaCobro
+Public RegistroTotalesAcreedor As DefinicionTotalesAcreedor
+Public RegistroTotalGeneral As DefinicionTotalGeneral
+
+Public Seguir As Boolean
+Public IdRemesa As Long
+Public rs As dao.Recordset
+Global ControlImporteRemesa As Single
+Global ControlRecibosRemesa As Single
+
+'Sub CrearDatosSoporte_19_14()
+'    CrearCabeceraPresentador
+'    CrearCabeceraAcreedorFechaCobro
+'    CrearRegistroIndividualObligatorio
+'    If Seguir Then
+'        CrearRegistroTotalesAcreedorFechaCobro
+'        CrearRegistroTotalesAcreeedor
+'        CrearRegistroTotalGeneral
+'    End If
+'End Sub
+
+Sub CrearCabeceraPresentador(Presentador As String, FechaSeleccionadaRemesa As Date, FechaSeleccionadaCargo As Date, IdentificacionFichero As String)
+On Error GoTo Errores_Rutina
+    Dim SQL As String
+    'sql = "SELECT FechaSoporte,IdentificacionFichero,CIF, Sufijo, Nombre, IBAN, CCC FROM Remesa_Cabecera WHERE Id = " & IdRemesa
+    SQL = "SELECT TOP 1 " & ConComillas(GetParam("OrdenanteNIF"), True) & " AS Cif, " & ConComillas(GetParam("OrdenanteSufijo"), True) & " AS Sufijo, " & ConComillas(GetParam("OrdenanteNombre"), True) & " as Nombre" _
+        & ", " & ConComillas(GetParam("OrdenanteEntidad"), True) & " AS EntidadPresentador, " & ConComillas(GetParam("OrdenanteOficina"), True) & " AS OficinaPresentador FROM 1MyConexionTablas"
+    'If Presentador <> "" Then SQL = SQL & " WHERE NIF_Ordenante = '" & Presentador & "'"
+    Set rs = CurrentDb.OpenRecordset(SQL)
+    If Not rs.EOF Then
+        RegistroCabeceraPresentador.C01_CodigoRegistro = "01"
+        RegistroCabeceraPresentador.C02_VersionCuaderno = "19154"
+        RegistroCabeceraPresentador.C03_NumeroDato = "001"
+        RegistroCabeceraPresentador.C04_IdentificadorPresentador = Transformar_ISO20022(IdentificadorPresentador(rs("Sufijo"), rs("CIF")))
+        RegistroCabeceraPresentador.C05_NombrePresentador = Transformar_ISO20022(rs("Nombre"))
+        RegistroCabeceraPresentador.C06_FechaCreacionFichero = TransformarFecha(FechaSeleccionadaRemesa)
+        RegistroCabeceraPresentador.C07_IdentificacionFichero = CalcularIdentificadorFichero(FechaSeleccionadaCargo, IdentificacionFichero)
+        RegistroCabeceraPresentador.C08_EntidadReceptora = rs("EntidadPresentador") 'Left(Rs("CCC"), 4)
+        RegistroCabeceraPresentador.C09_Oficinareceptora = rs("OficinaPresentador") 'Mid(Rs("CCC"), 5, 4)
+        RegistroCabeceraPresentador.C10_Libre = " "
+        RegistroCabeceraPresentador.CR = vbCrLf
+    
+        Put #1, , RegistroCabeceraPresentador
+    End If
+    rs.Close: Set rs = Nothing
+
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+End Sub
+
+
+Sub CrearCabeceraAcreedorFechaCobro(CodigoOrdenante As String, FechaSeleccionadaCargo As Date)
+On Error GoTo Errores_Rutina
+    Dim SQL As String
+    SQL = "SELECT TOP 1 " & ConComillas(GetParam("OrdenanteNIF"), True) & " AS Cif, " & ConComillas(GetParam("OrdenanteSufijo"), True) & " AS Sufijo, " & ConComillas(GetParam("OrdenanteNombre"), True) & " as Nombre" _
+        & ", " & ConComillas(GetParam("OrdenanteCuentaIBAN"), True) & " AS IBAN FROM 1MyConexionTablas"
+
+    Set rs = CurrentDb.OpenRecordset(SQL)
+    If Not rs.EOF Then
+        RegistroCabeceraAcreedorFechaCobro.C01_CodigoRegistro = "02"
+        RegistroCabeceraAcreedorFechaCobro.C02_VersionCuaderno = "19154"
+        RegistroCabeceraAcreedorFechaCobro.C03_NumeroDato = "002"
+        RegistroCabeceraAcreedorFechaCobro.C04_IdentificadorAcreedor = IdentificadorAcreedor(rs("Sufijo"), rs("CIF"))
+        RegistroCabeceraAcreedorFechaCobro.C05_FechaCobro = TransformarFecha(FechaSeleccionadaCargo)
+        RegistroCabeceraAcreedorFechaCobro.C06_NombreAcreedor = Transformar_ISO20022(rs("Nombre"))
+        RegistroCabeceraAcreedorFechaCobro.C07_DireccionAcreedor_D1 = ""
+        RegistroCabeceraAcreedorFechaCobro.C08_DireccionAcreedor_D2 = ""
+        RegistroCabeceraAcreedorFechaCobro.C09_DireccionAcreedor_D3 = ""
+        RegistroCabeceraAcreedorFechaCobro.C10_PaisAcreedor = ""
+        'RegistroCabeceraAcreedorFechaCobro.C07_DireccionAcreedor_D1 = HojaAcreedor.Range("B8")
+        'RegistroCabeceraAcreedorFechaCobro.C08_DireccionAcreedor_D2 = HojaAcreedor.Range("B9")
+        'RegistroCabeceraAcreedorFechaCobro.C09_DireccionAcreedor_D3 = HojaAcreedor.Range("B10")
+        'RegistroCabeceraAcreedorFechaCobro.C10_PaisAcreedor = HojaAcreedor.Range("B11")
+        If rs("IBAN") <> "" Then
+            RegistroCabeceraAcreedorFechaCobro.C11_CuentaAcreedor = rs("IBAN")
+        End If
+        RegistroCabeceraAcreedorFechaCobro.C12_Libre = " "
+        RegistroCabeceraAcreedorFechaCobro.CR = vbCrLf
+
+        Put #1, , RegistroCabeceraAcreedorFechaCobro
+    End If
+    rs.Close: Set rs = Nothing
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+End Sub
+
+Sub CrearRegistroIndividualObligatorio(IdRemesa As Long)
+On Error GoTo Errores_Rutina
+    Dim Entidad As String, OFICINA As String, DC As String, Cuenta As String, CuentaIBAN As String
+    Dim ImporteRecibo As Single
+
+    RegistroIndividualObligatorio.C01_CodigoRegistro = "03"
+    RegistroIndividualObligatorio.C02_VersionCuaderno = "19154"
+    RegistroIndividualObligatorio.C03_NumeroDato = "003"
+    Dim SQL As String
+    ' Recorro los registros de la Remesa
+    SQL = "SELECT tbRecibos.ENTIDAD, tbRecibos.OFICINA, tbRecibos.CODREF, tbRecibos.NIF_O, tbRecibos.SUFIJO_O, tbRecibos.NOMBRE, tbRecibos.DIGCONT, tbRecibos.NUMCUENTA, tbRecibos.IMPORTE, tbRecibos.CONCEPTO, tbRecibos.NUMRECIBO, tbRecibos.Detalle, "
+    SQL = SQL & " tbRecibos.ReferenciaAdeudo, tbRecibos.CuentaIBAN, tbRecibos.TipoAdeudo, tbRecibos.TipoDeudor, tbRecibos.ReferenciaMandato, tbRecibos.FechaMandato, tbRecibos.BIC "
+    SQL = SQL & " FROM tbRecibos"
+    SQL = SQL & " WHERE (((tbRecibos.IdReciboEmision) = " & IdRemesa & "))"
+    SQL = SQL & " ORDER BY tbRecibos.ENTIDAD, tbRecibos.OFICINA, tbRecibos.CODREF;"
+    Set rs = CurrentDb.OpenRecordset(SQL)
+    ControlImporteRemesa = 0
+    ControlRecibosRemesa = 0
+    If Not rs.EOF Then
+        rs.MoveFirst
+        Do While Not rs.EOF
+            ImporteRecibo = rs("Importe")
+            ' Si se introduce el IBAN no utilizo la cuenta CCC
+            If rs("CuentaIBAN") = "" Or IsNull(rs("CuentaIBAN")) Then
+                Cuenta = rs("Entidad") & rs("Oficina") & rs("DigCont") & rs("NumCuenta")
+                CuentaIBAN = HallarIBAN(Cuenta, True)
+                RegistroIndividualObligatorio.C20_CuentaDeudor = HallarIBAN(Entidad & OFICINA & DC & Cuenta, True)
+                If RegistroIndividualObligatorio.C20_CuentaDeudor = "" Then
+                    ImporteRecibo = 0
+                End If
+               RegistroIndividualObligatorio.C10_EntidadDeudor = rs("Entidad")
+            Else
+                RegistroIndividualObligatorio.C20_CuentaDeudor = rs("CuentaIBAN")
+            End If
+            RegistroIndividualObligatorio.C10_EntidadDeudor = IIf(IsNull(DLookup("BIC", "Bancos", "CodEntidad = '" & Mid(CuentaIBAN, 5, 4) & "'")), "", DLookup("BIC", "Bancos", "CodEntidad = '" & Mid(CuentaIBAN, 5, 4) & "'"))
+            
+            ' Compruebo si el valor del recibo es superior a 0
+            If ImporteRecibo > 0 Then
+                ControlImporteRemesa = ControlImporteRemesa + ImporteRecibo
+                ControlRecibosRemesa = ControlRecibosRemesa + 1
+                RegistroIndividualObligatorio.C04_ReferenciaAdeudo = Nz(rs("ReferenciaAdeudo"), rs("NUMRECIBO"))
+                    RegistroIndividualObligatorio.C05_ReferenciaMandato = rs("ReferenciaMandato")
+                If Nz(rs("TipoAdeudo"), "") = "" Then
+                    RegistroIndividualObligatorio.C06_TipoAdeudo = "RCUR"
+                Else
+                    RegistroIndividualObligatorio.C06_TipoAdeudo = rs("TipoAdeudo")
+                End If
+                RegistroIndividualObligatorio.C07_CategoriaProposito = "TRAD"
+                'RegistroIndividualObligatorio.C08_ImporteAdeudo = FormatarNumero(rs("Importe"), 11, True)
+                RegistroIndividualObligatorio.C08_ImporteAdeudo = Format(Round(rs("Importe"), 2) * 100, "00000000000")
+                RegistroIndividualObligatorio.C09_FechaMandato = TransformarFecha(rs("FechaMandato"))
+                RegistroIndividualObligatorio.C11_NombreDeudor = Transformar_ISO20022(rs("Nombre"))
+                RegistroIndividualObligatorio.C12_DireccionDeudor_D1 = ""
+                RegistroIndividualObligatorio.C13_DireccionDeudor_D2 = ""
+                RegistroIndividualObligatorio.C14_DireccionDeudor_D3 = ""
+                RegistroIndividualObligatorio.C15_PaisDeudor = ""
+            
+                If rs("NIF_O") = "" Then ' Si no se ha puesto NIF, no se ponen los otros datos de identificación
+                    RegistroIndividualObligatorio.C16_TipoIdentificacionDeudor = ""
+                    RegistroIndividualObligatorio.C17_IdentificacionDeudorCodigo = ""
+                Else
+                    Select Case rs("TipoDeudor")
+                        Case "Organización"
+                            RegistroIndividualObligatorio.C16_TipoIdentificacionDeudor = "1"
+                            RegistroIndividualObligatorio.C17_IdentificacionDeudorCodigo = "I" & rs("NIF_O")
+                        Case "Persona"
+                            RegistroIndividualObligatorio.C16_TipoIdentificacionDeudor = "2"
+                            RegistroIndividualObligatorio.C17_IdentificacionDeudorCodigo = "J" & rs("NIF_O")
+                    End Select
+                End If
+            
+                RegistroIndividualObligatorio.C18_IdentificacionDeudorEmisor = ""
+                RegistroIndividualObligatorio.C19_IdentificadorCuentaDeudor = "A"
+                RegistroIndividualObligatorio.C21_PropositoAdeudo = "GDSV"
+                RegistroIndividualObligatorio.C22_Concepto = Transformar_ISO20022(rs("Concepto"))
+                RegistroIndividualObligatorio.C23_Libre = ""
+                RegistroIndividualObligatorio.CR = vbCrLf
+            
+                Put #1, , RegistroIndividualObligatorio
+                Seguir = True
+            End If
+            rs.MoveNext
+        Loop
+    End If
+    
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+End Sub
+
+Sub CrearRegistroTotalesAcreedorFechaCobro()
+On Error GoTo Errores_Rutina
+
+    RegistroTotalesAcreedorFechaCobro.C01_CodigoRegistro = "04"
+    RegistroTotalesAcreedorFechaCobro.C02_IdentificadorAcreedor = RegistroCabeceraAcreedorFechaCobro.C04_IdentificadorAcreedor
+    RegistroTotalesAcreedorFechaCobro.C03_FechaCobro = RegistroCabeceraAcreedorFechaCobro.C05_FechaCobro
+    'RegistroTotalesAcreedorFechaCobro.C04_TotalImportes = FormatarNumero(ControlImporteRemesa, 17, True)
+    'RegistroTotalesAcreedorFechaCobro.C04_TotalImportes = Format(Round(ControlImporteRemesa, 2) * 100, "12345678901234567")
+    RegistroTotalesAcreedorFechaCobro.C04_TotalImportes = Format(Round(ControlImporteRemesa, 2) * 100, "00000000000000000")
+    RegistroTotalesAcreedorFechaCobro.C05_NumeroAdeudos = FormatarNumero(ControlRecibosRemesa, 8, False)
+    RegistroTotalesAcreedorFechaCobro.C06_TotalRegistros = FormatarNumero(ControlRecibosRemesa + 2, 10, False)
+    RegistroTotalesAcreedorFechaCobro.C07_Libre = ""
+    RegistroTotalesAcreedorFechaCobro.CR = vbCrLf
+    Put #1, , RegistroTotalesAcreedorFechaCobro
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+
+End Sub
+Sub CrearRegistroTotalesAcreeedor()
+On Error GoTo Errores_Rutina
+    RegistroTotalesAcreedor.C01_CodigoRegistro = "05"
+    RegistroTotalesAcreedor.C02_IdentificadorAcreedor = RegistroCabeceraAcreedorFechaCobro.C04_IdentificadorAcreedor
+    'RegistroTotalesAcreedor.C03_TotalImportes = FormatarNumero(ControlImporteRemesa, 17, True)
+    RegistroTotalesAcreedor.C03_TotalImportes = Format(Round(ControlImporteRemesa, 2) * 100, "00000000000000000")
+    RegistroTotalesAcreedor.C04_NumeroAdeudos = FormatarNumero(ControlRecibosRemesa, 8, False)
+    RegistroTotalesAcreedor.C05_TotalRegistros = FormatarNumero(ControlRecibosRemesa + 3, 10, False) 'Registro 02 + Registro 04 + Registro 05
+    RegistroTotalesAcreedor.C06_Libre = ""
+    RegistroTotalesAcreedor.CR = vbCrLf
+    
+    Put #1, , RegistroTotalesAcreedor
+
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+End Sub
+
+Sub CrearRegistroTotalGeneral()
+On Error GoTo Errores_Rutina
+    RegistroTotalGeneral.C01_CodigoRegistro = "99"
+    'RegistroTotalGeneral.C02_TotalImportesGeneral = FormatarNumero(DSum("Importe", "tblRecibos", "Remesa = " & IdRemesa), 17, True)
+    'RegistroTotalGeneral.C03_NumeroRegistros = FormatarNumero(DCount("NumRecibo", "tblRecibos", "Remesa = " & IdRemesa), 8, False)
+    'RegistroTotalGeneral.C04_TotalRegistros = FormatarNumero(DCount("NumRecibo", "tblRecibos", "Remesa = " & IdRemesa) + 5, 10, False) 'Registro 01 + Registro 02 + Registro 04 + Registro 05 + Registro 06
+    'RegistroTotalGeneral.C02_TotalImportesGeneral = FormatarNumero(ControlImporteRemesa, 17, True)
+    RegistroTotalGeneral.C02_TotalImportesGeneral = Format(Round(ControlImporteRemesa, 2) * 100, "00000000000000000")
+
+    RegistroTotalGeneral.C03_NumeroRegistros = FormatarNumero(ControlRecibosRemesa, 8, False)
+    RegistroTotalGeneral.C04_TotalRegistros = FormatarNumero(ControlRecibosRemesa + 5, 10, False)
+    RegistroTotalGeneral.C05_Libre = ""
+    RegistroTotalGeneral.CR = vbCrLf
+    
+    Put #1, , RegistroTotalGeneral
+
+Salir_Rutina:
+    Exit Sub
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+
+End Sub
+
+Private Function EliminarCaracteresNoAlfanumericos(valor As String) As String
+    Dim posicion As Integer, ValorTratado As String, Auxiliar As String
+    
+    ValorTratado = Trim(valor)
+    posicion = InStr(1, ValorTratado, "/")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+
+    
+    posicion = InStr(1, ValorTratado, "-")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+    
+    posicion = InStr(1, ValorTratado, "?")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+    
+    posicion = InStr(1, ValorTratado, "(")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+
+    posicion = InStr(1, ValorTratado, ")")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+    
+    posicion = InStr(1, ValorTratado, ".")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+
+    posicion = InStr(1, ValorTratado, ",")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+
+    posicion = InStr(1, ValorTratado, "'")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+    
+    posicion = InStr(1, ValorTratado, "+")
+    If posicion > 0 Then
+        Auxiliar = Left(ValorTratado, posicion - 1)
+        Auxiliar = Auxiliar & Right(ValorTratado, Len(ValorTratado) - posicion)
+        ValorTratado = Auxiliar
+    End If
+    
+    EliminarCaracteresNoAlfanumericos = ValorTratado
+End Function
+
+Private Function CalcularIdentificadorFichero(FechaSoporte As Date, IdentificacionFichero As String) As String
+Dim TipoMensaje As String * 3, Fecha As String * 8, HoraCompleta As String * 11, Referencia As String * 13
+
+    TipoMensaje = "PRE"
+    Fecha = TransformarFecha(FechaSoporte)
+    HoraCompleta = Format(Time, "hhmmss") & "00001"   ' Sumo los milisegundos
+    Referencia = IdentificacionFichero
+
+    CalcularIdentificadorFichero = TipoMensaje & Fecha & HoraCompleta & Referencia
+End Function
+
+Private Function IdentificadorPresentador(Sufijo As String, CIF As String) As String
+    Dim A As String * 2, B As String * 2, C As String * 3, D As String * 27
+    A = "ES" ' Código del País
+    C = Sufijo
+    D = EliminarCaracteresNoAlfanumericos(CIF)
+           
+    Dim AntesTransformacion As String, Transformacion As String
+    AntesTransformacion = Trim(D) & A & "00"
+    Transformacion = CambiarLetrasPaisPorNumeros(AntesTransformacion)
+    B = CalcularModulo(Transformacion, 97)
+        
+    IdentificadorPresentador = A & B & C & D
+End Function
+
+Private Function IdentificadorAcreedor(Sufijo As String, CIF As String) As String
+    Dim A As String * 2, B As String * 2, C As String * 3, D As String * 27
+    A = "ES" ' Código del País
+    C = Sufijo
+    D = EliminarCaracteresNoAlfanumericos(CIF)
+           
+    Dim AntesTransformacion As String, Transformacion As String
+    AntesTransformacion = Trim(D) & A & "00"
+    Transformacion = CambiarLetrasPaisPorNumeros(AntesTransformacion)
+    B = CalcularModulo(Transformacion, 97)
+        
+    IdentificadorAcreedor = A & B & C & D
+End Function
+
+Private Function TransformarFecha(valor As Date) As String
+    Dim dia As String, Mes As String, Anio As String
+    dia = Day(valor)
+    Mes = Month(valor)
+    Anio = Year(valor)
+    TransformarFecha = Format(Anio, "0000") & Format(Mes, "00") & Format(dia, "00")
+End Function
+
+
+Function FormatarNumero(valor As Single, Posiciones As Integer, Optional decimales As Boolean) As String
+    ' Esta función formata el número recibido. Pone el tamaño recibido. Deja los decimales a la derecha
+    Dim ValorStr As String, posicion As Integer
+    ValorStr = Trim(Str(valor))
+    posicion = InStr(1, ValorStr, ".")
+    If posicion > 0 Then
+        ' El número tiene decimales. Los hemos de quitar
+        If Len(Right(ValorStr, Len(ValorStr) - posicion)) = 1 Then
+            ' Si el número es 10,5 lo transformo en 10,50.
+            FormatarNumero = Left(ValorStr, posicion - 1) & Right(ValorStr, Len(ValorStr) - posicion) & "0"
+        Else
+            FormatarNumero = Left(ValorStr, posicion - 1) & Right(ValorStr, Len(ValorStr) - posicion) & "0"
+        End If
+    Else
+        If decimales Then
+            FormatarNumero = ValorStr & "00"
+        Else
+            FormatarNumero = ValorStr
+        End If
+    End If
+    For posicion = 1 To Posiciones - Len(FormatarNumero)
+        FormatarNumero = "0" & FormatarNumero
+    Next
+End Function
+
+
+Private Function CambiarLetrasPaisPorNumeros(valor As String) As String
+On Error GoTo Errores_Rutina
+
+    Dim Contador As Integer
+    Dim Cadena As String:    Cadena = UCase(valor)
+    
+    For Contador = 1 To Len(valor) * 2 ' Como la cadena cambia el tamaño y lo amplía, multiplico por 2. Se cambia cada carácter por dos caracteres.
+        ' Busco carácter a carácter
+        Select Case Mid(Cadena, Contador, 1)
+            Case "A": Cadena = Replace(Cadena, "A", "10")
+            Case "B": Cadena = Replace(Cadena, "B", "11")
+            Case "C": Cadena = Replace(Cadena, "C", "12")
+            Case "D": Cadena = Replace(Cadena, "D", "13")
+            Case "E": Cadena = Replace(Cadena, "E", "14")
+            Case "F": Cadena = Replace(Cadena, "F", "15")
+            Case "G": Cadena = Replace(Cadena, "G", "16")
+            Case "H": Cadena = Replace(Cadena, "H", "17")
+            Case "I": Cadena = Replace(Cadena, "I", "18")
+            Case "J": Cadena = Replace(Cadena, "J", "19")
+            Case "K": Cadena = Replace(Cadena, "K", "20")
+            Case "L": Cadena = Replace(Cadena, "L", "21")
+            Case "M": Cadena = Replace(Cadena, "M", "22")
+            Case "N": Cadena = Replace(Cadena, "N", "23")
+            Case "O": Cadena = Replace(Cadena, "O", "24")
+            Case "P": Cadena = Replace(Cadena, "P", "25")
+            Case "Q": Cadena = Replace(Cadena, "Q", "26")
+            Case "R": Cadena = Replace(Cadena, "R", "27")
+            Case "S": Cadena = Replace(Cadena, "S", "28")
+            Case "T": Cadena = Replace(Cadena, "T", "29")
+            Case "U": Cadena = Replace(Cadena, "U", "30")
+            Case "V": Cadena = Replace(Cadena, "V", "31")
+            Case "W": Cadena = Replace(Cadena, "W", "32")
+            Case "X": Cadena = Replace(Cadena, "X", "33")
+            Case "Y": Cadena = Replace(Cadena, "Y", "34")
+            Case "Z": Cadena = Replace(Cadena, "Z", "35")
+        End Select
+    Next
+    CambiarLetrasPaisPorNumeros = Cadena
+Salir_Rutina:
+    Exit Function
+
+Errores_Rutina:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description, vbCritical, Err.Number
+            Stop: Resume
+    End Select
+
+End Function
+
+Function HallarIBAN(Cuenta As String, Optional CCC As Boolean) As String
+    Dim DigControl As String, CuentaIBAN As String
+
+    If CCC Then
+        CuentaIBAN = "ES00" & Cuenta
+    Else
+        CuentaIBAN = Left(Cuenta, 2) & "00" & Mid(Cuenta, 5, Len(Cuenta) - 4)
+    End If
+    
+    ' Muevo los 4 caracteres de la izquierda a la derecha. Muevo lo que es "ES00"
+    CuentaIBAN = Mid(CuentaIBAN, 5, Len(CuentaIBAN) - 4) & Left(CuentaIBAN, 4)
+
+     ' Convierto los caracteres alfanuméricos en números
+    CuentaIBAN = CambiarLetrasPaisPorNumeros(CuentaIBAN)
+    
+    DigControl = CalcularModulo(CuentaIBAN, 97)
+    
+    If CCC Then
+        HallarIBAN = "ES" & Format(DigControl, "00") & Cuenta
+    Else
+        HallarIBAN = Left(Cuenta, 2) & Format(DigControl, "00") & Right(Cuenta, Len(Cuenta) - 4)
+    End If
+    
+End Function
+Function CalcularModulo(Cuenta As String, modulo As Integer) As String
+Dim vector, Resto, Indice
+
+vector = Split(Format(Cuenta, "###### ###### ###### ###### ######"), Space(1))
+
+Select Case modulo
+    Case 97
+        Resto = Val(vector(0)) Mod 97
+        
+        For Indice = 0 To UBound(vector) - 1
+            Resto = (Resto & vector(Indice + 1)) Mod 97
+        Next Indice
+        
+        CalcularModulo = Format(98 - Val(Resto), "00")
+    Case Else
+        Stop
+End Select
+End Function
+
+Private Function CalcularDCEntidad(Entidad As String, OFICINA As String) As Integer
+    Dim Temporal As Integer
+           
+    Entidad = Format(Entidad, "0000")
+    OFICINA = Format(OFICINA, "0000")
+    
+    Temporal = 0
+    Temporal = Temporal + Mid(Entidad, 1, 1) * 4
+    Temporal = Temporal + Mid(Entidad, 2, 1) * 8
+    Temporal = Temporal + Mid(Entidad, 3, 1) * 5
+    Temporal = Temporal + Mid(Entidad, 4, 1) * 10
+    Temporal = Temporal + Mid(OFICINA, 1, 1) * 9
+    Temporal = Temporal + Mid(OFICINA, 2, 1) * 7
+    Temporal = Temporal + Mid(OFICINA, 3, 1) * 3
+    Temporal = Temporal + Mid(OFICINA, 4, 1) * 6
+    Temporal = 11 - (Temporal Mod 11)
+    
+    If Temporal = 11 Then
+        CalcularDCEntidad = "0"
+    ElseIf Temporal = 10 Then
+        CalcularDCEntidad = "1"
+    Else
+        CalcularDCEntidad = Format(Temporal, "0")
+    End If
+    
+End Function
+
+Private Function CalcularDCCuenta(Cuenta As String) As Integer
+    Dim Temporal As Long
+           
+    Cuenta = Format(Cuenta, "0000000000")
+    
+    Temporal = 0
+    Temporal = Temporal + Mid(Cuenta, 1, 1) * 1
+    Temporal = Temporal + Mid(Cuenta, 2, 1) * 2
+    Temporal = Temporal + Mid(Cuenta, 3, 1) * 4
+    Temporal = Temporal + Mid(Cuenta, 4, 1) * 8
+    Temporal = Temporal + Mid(Cuenta, 5, 1) * 5
+    Temporal = Temporal + Mid(Cuenta, 6, 1) * 10
+    Temporal = Temporal + Mid(Cuenta, 7, 1) * 9
+    Temporal = Temporal + Mid(Cuenta, 8, 1) * 7
+    Temporal = Temporal + Mid(Cuenta, 9, 1) * 3
+    Temporal = Temporal + Mid(Cuenta, 10, 1) * 6
+    Temporal = 11 - (Temporal Mod 11)
+    
+    If Temporal = 11 Then
+        CalcularDCCuenta = "0"
+    ElseIf Temporal = 10 Then
+        CalcularDCCuenta = "1"
+    Else
+        CalcularDCCuenta = Format(Temporal, "0")
+    End If
+End Function
+
+Private Function Transformar_ISO20022(valor As String) As String
+    valor = Replace(valor, "Ñ", "N")
+    valor = Replace(valor, "ñ", "n")
+    valor = Replace(valor, "Ç", "C")
+    valor = Replace(valor, "ç", "c")
+    valor = Replace(valor, vbCr, " ")
+    valor = Replace(valor, vbLf, " ")
+    Transformar_ISO20022 = valor
+End Function
+
+Public Sub RepasoFicheroAsociados()
+    Dim rs As dao.Recordset, i As Integer
+    Set rs = CurrentDb.OpenRecordset("Asociados")
+    While Not rs.EOF
+        rs.Edit
+        rs("CuentaIBAN") = HallarIBAN(rs("CodigoEntidad") & rs("CodigoSucursal") & rs("DigitoControl") & rs("NumeroCuenta"), True)
+        rs("FechaMandato") = CDate("2014/01/01")
+        rs("ReferenciaMandato") = rs("NumeroCarnet")
+        rs.Update
+        i = i + 1
+        rs.MoveNext
+    Wend
+    MsgBox i & " registros actualizados"
+End Sub

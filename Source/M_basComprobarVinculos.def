@@ -8,7 +8,7 @@ Public Function ComprobarVinculos()
     If strCurDir = DLookup("DirectorioDeConexion", "1myConexionTablas", "NombreTabla = '-X-X-'") Then
     Else
 'CFG + DAT
-        Dim strC As String, fso As FileSystemObject, strF As String
+        Dim strC As String, fso As FileSystemObject, sDAT As String, sCFG As String
         strC = DirectorioDe(CurrentDb.Name)
         strC = Nz(DimeCarpeta(strC, "Indique carpeta de datos de G4"), "")
         If strC = "" Then GoTo Finish
@@ -17,12 +17,15 @@ Public Function ComprobarVinculos()
         'CurrentDb.Execute "UPDATE 1myConexionTablas SET DirectorioDeConexion = " & ConComillas(strC) & _
                           " WHERE NombreTabla = 'cfgParam'", dbFailOnError
         'ReconectarTablasYaVinculadas strF
-        strF = Nz(DLookup("FicheroDeconexion", "1myConexionTablas", "NombreTabla = 'tbClientes'"), "G4_dat.accdb")
+        sDAT = Nz(DLookup("FicheroDeconexion", "1myConexionTablas", "NombreTabla = 'tbClientes'"), "G4_dat.accdb")
+        sCFG = Nz(DLookup("FicheroDeconexion", "1myConexionTablas", "NombreTabla = 'cfgParam'"), "G4CFG.mdb")
         CurrentDb.Execute "UPDATE 1myConexionTablas SET DirectorioDeConexion = " & ConComillas(strC) & _
-                          " WHERE FicheroDeConexion = '" & strF & "'", dbFailOnError
+                          " WHERE FicheroDeConexion = '" & sDAT & "'" _
+                          & " OR FicheroDeConexion = '" & sCFG & "'", dbFailOnError
         'ReconectarTablasYaVinculadas strF
 '+SYS
         ReconectarTablasYaVinculadas
+        SetParam "AplicacionCarpetaDatos", strC, 10, True
             
 Finish:
         strSQL = "UPDATE 1myConexionTablas SET [1myConexionTablas].DirectorioDeConexion = '" & strCurDir & "'"
@@ -426,3 +429,108 @@ End Function
 Public Function ComaPunto(vNum As Variant) As String
     ComaPunto = Replace(CStr(vNum), ",", ".")
 End Function
+
+Public Sub ComprobarUpdates()
+    On Error GoTo HandleError
+    Dim sCUpdate As String, sFUpdate As String, iObjType As AcObjectType, sObjName As String
+    Dim sFImport As String, sCUpdated As String, sCSaved As String, i As Integer, f As Integer, sMsg As String
+    sCUpdate = DirectorioDe(CurrentDb.Name) & "Update"
+    If Dir(sCUpdate, vbDirectory) = "" Then MkDir sCUpdate
+    sCUpdate = sCUpdate & "\"
+    
+    Dim sFiles As String, vFiles As Variant
+    sFUpdate = Dir(sCUpdate & "*.def")
+    While sFUpdate <> ""
+        sFiles = sFiles & "," & sFUpdate
+        sFUpdate = Dir()
+    Wend
+    If sFiles = "" Then GoTo HandleExit
+    
+    sCUpdated = sCUpdate & "Updated"
+    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
+    sCUpdated = sCUpdated & "\" & Format(Date, "yyyy_mm_dd")
+    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
+    sCUpdated = sCUpdated & "\"
+    
+    sCSaved = sCUpdate & "Saved"
+    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
+    sCSaved = sCSaved & "\" & Format(Date, "yyyy_mm_dd")
+    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
+    sCSaved = sCSaved & "\"
+    
+    
+    sFiles = Mid(sFiles, 2)
+    vFiles = Split(sFiles, ",")
+    For f = 0 To UBound(vFiles)
+        sFUpdate = vFiles(f)
+        Select Case Left(sFUpdate, 2)
+            Case "F_"
+                iObjType = acForm
+            Case "R_"
+                iObjType = acReport
+            Case "Q_"
+                iObjType = acQuery
+            Case "S_"
+                iObjType = acMacro
+            Case "M_"
+                iObjType = acModule
+            Case Else
+                MsgBox "No se reconoció el tipo de archivo a importar: " & sFUpdate, vbExclamation
+                GoTo HandleExit
+        End Select
+        i = InStrRev(sFUpdate, ".")
+        sObjName = Mid(sFUpdate, 3, i - 3)
+        SysCmd acSysCmdSetStatus, "Actualizando " & f + 1 & "/" & UBound(vFiles) + 1 & " : " & sFUpdate
+        If Dir(sCSaved & sFUpdate) <> "" Then
+            i = 0
+            While Dir(sCSaved & sFUpdate & "_" & i) <> ""
+                i = i + 1
+            Wend
+            FileCopy sCSaved & sFUpdate, sCSaved & sFUpdate & "_" & i
+        End If
+        On Error Resume Next
+        SaveAsText iObjType, sObjName, sCSaved & sFUpdate
+        On Error GoTo HandleError
+        LoadFromText iObjType, sObjName, sCUpdate & sFUpdate
+        sMsg = sMsg & ", " & sObjName
+        FileCopy sCUpdate & sFUpdate, sCUpdated & sFUpdate
+        Kill sCUpdate & sFUpdate
+    Next f
+    SysCmd acSysCmdClearStatus
+    sMsg = Mid(sMsg, 3)
+    MsgBox "Se actualizaron " & f & " objetos: " & sMsg, vbInformation, "Actualizado H4"
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Public Sub aaExportarModuloActual()
+    On Error GoTo HandleError
+
+    Dim Ruta As String
+    Dim ModuloActual As String
+
+
+    ' Obtiene el nombre del módulo activo en la ventana
+    ModuloActual = Trim(Replace(Application.VBE.ActiveWindow.Caption, "(Código)", ""))
+    
+    ' Define la ruta donde se guardará el archivo de exportación
+    Ruta = DirectorioDe(CurrentDb.Name) & "Source\" & "M_" & ModuloActual & ".def"
+
+    ' Usa SaveAsText para exportar el módulo
+    'Application.VBE.VBProjects(1).VBComponents(ModuloActual).SaveAsText vbext_ct_StdModule, Ruta
+    
+    SaveAsText acModule, ModuloActual, Ruta
+
+    MsgBox "Módulo exportado a: " & Ruta, vbInformation
+    
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub

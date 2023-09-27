@@ -1,0 +1,129 @@
+Option Compare Database
+Option Explicit
+
+Function ConvertBinaryToBase64(filePath As String) As String
+    On Error GoTo HandleError
+    Dim xmlObj As Object
+    Dim nodeObj As Object
+    
+    ' Crea un objeto DOMDocument
+    Set xmlObj = CreateObject("MSXML2.DOMDocument")
+    
+    ' Crea un elemento temporal
+    Set nodeObj = xmlObj.createElement("tmp")
+    
+    ' Lee el archivo binario y lo asigna al nodo
+    nodeObj.DataType = "bin.base64"
+    nodeObj.nodeTypedValue = LoadBinary(filePath)
+    
+    ' Obtiene la representación Base64 del contenido binario
+    ConvertBinaryToBase64 = Trim(Replace(Replace(nodeObj.Text, vbCr, ""), vbLf, ""))
+    
+    Set nodeObj = Nothing
+    Set xmlObj = Nothing
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Function LoadBinary(filePath As String) As Variant
+    On Error GoTo HandleError
+    Dim binaryStream As Object
+    Set binaryStream = CreateObject("ADODB.Stream")
+    
+    binaryStream.Type = 1 ' Tipo binario
+    binaryStream.Open
+    binaryStream.LoadFromFile filePath
+    
+    LoadBinary = binaryStream.Read
+    binaryStream.Close
+    Set binaryStream = Nothing
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+'Ejemplo de utilización
+Sub TestBase64Conversion()
+    Dim filePath As String
+    Dim base64String As String
+    
+    filePath = "C:\ruta\a\tu\archivo.pdf"  ' Cambia esto a la ruta de tu archivo
+    base64String = ConvertBinaryToBase64(filePath)
+    
+    ' Ahora, base64String contiene la representación en Base64 de tu archivo
+    Debug.Print base64String
+End Sub
+
+
+Sub SaveBase64AsBinary(base64String As String, outputFile As String)
+    On Error GoTo HandleError
+    Dim xmlObj As Object
+    Dim nodeObj As Object
+    Dim binaryData As Variant
+
+    ' Crea un objeto DOMDocument
+    Set xmlObj = CreateObject("MSXML2.DOMDocument")
+    
+    ' Crea un elemento temporal
+    Set nodeObj = xmlObj.createElement("tmp")
+    
+    ' Asigna la cadena Base64 al nodo
+    nodeObj.DataType = "bin.base64"
+    nodeObj.Text = base64String
+    
+    ' Obtiene la representación binaria del contenido Base64
+    binaryData = nodeObj.nodeTypedValue
+    
+    ' Guarda la representación binaria en un archivo
+    SaveBinary outputFile, binaryData
+
+    Set nodeObj = Nothing
+    Set xmlObj = Nothing
+    
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Sub SaveBinary(filePath As String, ByRef binaryData As Variant)
+    On Error GoTo HandleError
+    Dim binaryStream As Object
+    Set binaryStream = CreateObject("ADODB.Stream")
+    
+    binaryStream.Type = 1 ' Tipo binario
+    binaryStream.Open
+    binaryStream.Write binaryData
+    binaryStream.SaveToFile filePath, 2 ' Overwrite existing
+    
+    binaryStream.Close
+    Set binaryStream = Nothing
+    
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+'Ejemplo
+Sub TestBinarySave()
+    Dim base64String As String
+    Dim outputPath As String
+    
+    base64String = "TU_BASE64_AQUÍ" ' Reemplaza esto con tu cadena Base64
+    outputPath = "C:\ruta\de\salida\archivo.pdf" ' Cambia esto a la ruta de salida deseada
+    SaveBase64AsBinary base64String, outputPath
+End Sub

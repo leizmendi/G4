@@ -34,14 +34,17 @@ Public Function PEstado_num(sDestino As String) As PrendaEstado
     End Select
 End Function
 
-
 Public Function DimePrendaTipoMedida(lngIdPrendaTipoMedida As Long _
                           , Optional iSinTipo As Integer = False _
                           , Optional bDimeCodigo As Boolean = False) As String
     On Error GoTo HandleError
-    Dim lngIdPrendaTipo As Long, strR As String
+    Dim lngIdPrendaTipo As Long, strR As String, sSubT As String
     lngIdPrendaTipo = Nz(DLookup("IdPrendaTipo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), 0)
-    If iSinTipo = False Then strR = Nz(DLookup(IIf(Not bDimeCodigo, "TipoPrenda", "CodTipo"), "tbPrendasTipo", "IdPrendaTipo = " & lngIdPrendaTipo), "?") & " "
+    If iSinTipo = False Then
+        strR = Nz(DLookup(IIf(Not bDimeCodigo, "TipoPrenda", "CodTipo"), "tbPrendasTipo", "IdPrendaTipo = " & lngIdPrendaTipo), "?") & " "
+    End If
+    sSubT = Nz(DLookup("Subtipo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "")
+    If sSubT <> "" Then strR = strR & Left(Trim(sSubT), 1) & " "
     strR = strR & Nz(DLookup("Ancho", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?") & "x" & Nz(DLookup("Largo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lngIdPrendaTipoMedida), "?")
     DimePrendaTipoMedida = strR
     
@@ -73,7 +76,8 @@ HandleError:
     Resume HandleExit
 End Function
 
-Public Function DimeCliente(lngIdCliente As Long) As String
+Public Function DimeCliente(lngIdCliente As Long _
+                            , Optional bCabeceraCliente As Boolean = False) As String
     On Error GoTo HandleError
     Dim strR As String, iTipo As Integer
     iTipo = Nz(DLookup("Tipo", "tbClientes", "IdCliente = " & lngIdCliente), 1)
@@ -81,6 +85,10 @@ Public Function DimeCliente(lngIdCliente As Long) As String
         strR = Nz(DLookup("RazonSocial", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
     Else
         strR = Nz(DLookup("[Nombre] & ' '& [Apellidos]", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
+    End If
+    If bCabeceraCliente Then
+        strR = strR & vbCrLf & Nz(DLookup("Direccion", "tbClientes", "IdCliente = " & lngIdCliente), "-")
+        strR = strR & vbCrLf & Nz(DLookup("[CP] & ' ' & [Localidad] & '(' & [Provincia] & ')'", "tbClientes", "IdCliente = " & lngIdCliente), "-")
     End If
     DimeCliente = strR
     
@@ -103,7 +111,7 @@ Public Sub PonGruposCliente(lngIdCliente As Long)
         strR = strR & rs(0) & ", "
         rs.MoveNext
     Wend
-    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 150)
+    If Len(strR) > 2 Then strR = recdertop(strR, 2, 150)
     strSQL = "UPDATE tbClientes SET Grupos = " & ConComillas(strR) & " WHERE IdCliente = " & lngIdCliente
     CurrentDb.Execute strSQL, dbFailOnError
 HandleExit:
@@ -142,13 +150,13 @@ Public Sub My2ListGrupoClientes(lngIdCliente As Long)
     strSQL = "SELECT tbCliente_Grupo.Id, tbClientesGrupos.GrupoClientes, tbCliente_Grupo.IdGrupoClientes"
     strSQL = strSQL & " FROM tbClientesGrupos INNER JOIN tbCliente_Grupo ON tbClientesGrupos.IdGrupoClientes = tbCliente_Grupo.IdGrupoClientes"
     strSQL = strSQL & " WHERE tbCliente_Grupo.IdCliente=" & lngIdCliente
-    'CurrentDb.QueryDefs("qryAsignadas").SQL = strSQL
+    CurrentDb.QueryDefs("qryAsignadas").SQL = strSQL
     sAsignadas = strSQL
     strSQL = "SELECT tbClientesGrupos.IdGrupoClientes, tbClientesGrupos.GrupoClientes"
     strSQL = strSQL & " FROM tbClientesGrupos LEFT JOIN qryAsignadas ON tbClientesGrupos.IdGrupoClientes = qryAsignadas.IdGrupoClientes"
     strSQL = strSQL & " WHERE (((qryAsignadas.IdGrupoClientes) Is Null))"
     strSQL = strSQL & " ORDER BY tbClientesGrupos.Orden;"
-    'CurrentDb.QueryDefs("qryDisponibles").SQL = strSQL
+    CurrentDb.QueryDefs("qryDisponibles").SQL = strSQL
     sDisponibles = strSQL
     strSQL = "INSERT INTO tbCliente_Grupo(IdGrupoClientes, IdCliente)"
     strSQL = strSQL & " SELECT <<ItemData>> as IdGrupo, " & lngIdCliente & " as IdEmp"
@@ -226,9 +234,24 @@ HandleExit:
 HandleError:
     MsgBox Err.Description
     Resume HandleExit
-    
-
 End Function
+
+Public Function SetPackEstado(lIdPack As Long, iEstado As PrendaEstado, lIdDestino As Long) As Boolean
+    On Error GoTo HandleError
+    Dim rsP As Recordset
+    Set rsP = CurrentDb.OpenRecordset("SELECT IdPrenda FROM tbPacksDet WHERE IdPackCab = " & lIdPack, dbOpenSnapshot)
+    While Not rsP.EOF
+        SetPrendaEstado rsP("IdPrenda"), iEstado, Now(), lIdDestino
+        rsP.MoveNext
+    Wend
+    SetPackEstado = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
 
 Public Function GeneraQR(sCodigo As String) As Boolean
     On Error GoTo HandleError
@@ -265,4 +288,446 @@ End Function
 
 Public Function DimeView() As AcView
     DimeView = IIf(Nz(GetParam("ProduccionImprimirTodoEnVistaPreviaSN"), False), acViewPreview, acViewNormal)
+End Function
+
+Public Function AñadirCliente() As Long
+    MsgBox "No implementado", vbInformation
+End Function
+
+Public Function DimeCDire(lIdCDireccion As Long) As String
+    Dim sR As String
+    sR = Nz(DLookup("[Direccion] & '|@#' & [CP] & ' ' & [Localidad]", "tbClientesDirecciones", "IdCDireccion = " & lIdCDireccion), "")
+    sR = Replace(sR, "|@#", vbCrLf)
+    DimeCDire = sR
+End Function
+
+Public Function NuevoAlbaran(Optional lIdCli As Long = 0 _
+                    , Optional sDireccionEntrega As String = "") As Long
+    'Genera un nuev registros en tbAlbaranesEnvioCab y si va todo bien devuelve el IdAlbaranECab correspondiente
+    On Error GoTo HandleError
+    Dim sSQL As String, lNum As Long, lIdTar As Long, bIVA As Boolean, lIdCDireccion As Long
+    lIdCli = Nz(buscaayuda("CLI0", lIdCli, 1, True), 0)
+    If lIdCli = 0 Then GoTo HandleExit
+    If lIdCli = -1 Then
+        lIdCli = AñadirCliente()
+        If lIdCli = 0 Then GoTo HandleExit
+    End If
+    lIdTar = Nz(DLookup("IdTarifa", "tbClientes", "IdCliente = " & lIdCli), 0)
+    If lIdTar = 0 Then
+        MsgBox "No se ha indicado la tarifa del cliente", vbExclamation
+        GoTo HandleExit
+    End If
+    bIVA = Nz(DLookup("IVAincluidoSN", "tbTarifas", "IdTarifa = " & lIdTar), False)
+    lNum = Nz(DMax("Numero", "tbAlbaranesEnvioCab"), 0) + 1
+    If sDireccionEntrega <> "" Then
+        sSQL = "INSERT INTO tbAlbaranesEnvioCab (IdCliente, IdCDireccion, Numero, Fecha, DireccionEnvio, IVAincluido)" _
+                & " VALUES(" & lIdCli & ", Null, " & lNum & ", " & CLng(Date) & ", " & ConComillas(Replace(sDireccionEntrega, "'", ""), True) & ", " & IIf(bIVA, "1", "0") & ")"
+    Else
+        sSQL = "SELECT IdCDireccion, Direccion & ' ' & Localidad AS Dirección FROM tbClientesDirecciones WHERE IdCliente = " & lIdCli
+        CurrentDb.Execute "UPDATE sysBusquedas SET strSQL= " & ConComillas(sSQL) & " WHERE CodBusqueda = 'DIRCL'", dbFailOnError
+        lIdCDireccion = Nz(buscaayuda("DIRCL", lIdCDireccion, 1, , , , True), 0)
+        If lIdCDireccion = 0 Then GoTo HandleExit
+            sSQL = "INSERT INTO tbAlbaranesEnvioCab (IdCliente, IdCDireccion, Numero, Fecha, DireccionEnvio, IVAincluido)" _
+                    & " VALUES(" & lIdCli & ", " & lIdCDireccion & ", " & lNum & ", " & CLng(Date) & ", " & ConComillas(DimeCDire(lIdCDireccion), True) & ", " & IIf(bIVA, "1", "0") & ")"
+    End If
+    CurrentDb.Execute sSQL, dbFailOnError
+    NuevoAlbaran = Nz(DLookup("IdAlbaranECab", "tbAlbaranesEnvioCab", "Numero = " & lNum), 0)
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+
+End Function
+
+Public Function AddAlbaranDet(lIdAECab As Long _
+                    , Optional lIdPack As Long = 0 _
+                    , Optional lIdServicio As Long = 0 _
+                    , Optional lIdPTM As Long = 0 _
+                    , Optional iCantidad As Integer = 0 _
+                    ) As Integer
+    'Genera un nuevo registro en tbAlbaranesEnvioDet y si va todo bien devuelve cantidad de líneas de detalle añadidas
+    'En caso de pasarse IdPack se obtiene el resto de datos del Pack
+    'El precio se deberá calcular por el Cliente + Servicio + PTM ... veremos a ver ...
+    On Error GoTo HandleError
+    Dim sSQL As String, lNum As Long, lIdCli As Long, lIdTarifa As Long, i As Integer
+    Dim rs As Recordset, lIdPre As Long, cPre As Currency, cBase As Currency, cImporte As Currency, cIVA As Currency, bIVAinc As Boolean, sConcepto As String
+    Dim rsP As Recordset, lIdAEDet As Long, iR As Integer
+    lIdCli = Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAECab), 0)
+    If lIdCli = 0 Then
+        MsgBox "No se encontró Cliente en el Albarán", vbExclamation
+        GoTo HandleExit
+    End If
+    bIVAinc = DLookup("IVAincluido", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAECab)
+    cIVA = GetParam("Facturacion_IVApredeterminado")
+    If lIdPack <> 0 Then
+        'Comprueba si el Pack se encuentra ya en otro albarán
+        If Not IsNull(DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab = " & lIdPack)) Then
+            Dim sAlb As String
+            sAlb = DLookup("[Numero] & ' del ' & [Fecha]", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & DLookup("IdAlbaranECab", "tbAlbaranesEnvioDet", "IdAlbaranEDet = " & DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab = " & lIdPack)))
+            MsgBox "El Pack se encuentra ya incluido en el albarán Nº " & sAlb, vbExclamation
+            GoTo HandleExit
+        End If
+        'Localiza Servicio correspondiente a Empaquetados (en principio es el IdServicio = 1 pero está abierto a modificaciones posteriore
+        lIdServicio = 1
+        If lIdServicio = 0 Then
+            MsgBox "No se encontró IdServicio para 'Renting Ud'", vbExclamation
+            GoTo HandleExit
+        End If
+        lIdTarifa = Nz(DLookup("IdTarifa", "tbClientes", "IdCliente = " & lIdCli), 0)
+        If lIdTarifa = 0 Then
+            MsgBox "El Cliente no tiene asignada la tarifa", vbExclamation
+            GoTo HandleExit
+        End If
+        'Revisa el contenido del Pack....
+        sSQL = "SELECT Count(tbPrendas.IdPrenda) AS Cantidad, tbPrendas.IdPrendaTipoMedida" _
+            & " FROM tbPrendas INNER JOIN tbPacksDet ON tbPrendas.IdPrenda = tbPacksDet.IdPrenda" _
+            & " WHERE tbPacksDet.IdPackCab = " & lIdPack _
+            & " GROUP BY tbPrendas.IdPrendaTipoMedida;"
+        Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+        While Not rs.EOF
+            'Comprueba y selecciona posibles precios del servicio - cliente - TipoPrendaMedida, en caso de existir más de una opción ofrece la selección
+            sSQL = "SELECT tbPrecios.IdPrecio, Concepto, tbPrecios.Precio" _
+                & " FROM tbPrecios" _
+                & " WHERE IdServicio=" & lIdServicio & " AND IdTarifa=" & lIdTarifa & " AND IdPTM=" & rs("IdPrendaTipoMedida")
+                'LEFT JOIN tbPrendasTipoMedida ON tbPreciosUdRenting.IdPTM = tbPrendasTipoMedida.IdPrendaTipoMedida
+            CurrentDb.Execute "UPDATE sysBusquedas SET strSQL = " & ConComillas(sSQL, True) & " WHERE CodBusqueda='PRECI'", dbFailOnError
+            lIdPre = Nz(buscaayuda("PRECI", , 1, , , False, True), -1)
+            If lIdPre <> -1 Then
+                'Ver si hay lineas de pedido del cliente y de esa PTM pendientes de servir
+                sConcepto = Nz(DLookup("Concepto", "tbPrecios", "IdPrecio = " & lIdPre), 0)
+                lIdPTM = Nz(DLookup("IdPTM", "tbPrecios", "IdPrecio = " & lIdPre), 0)
+                lIdPTM = IdPTM_base(lIdPTM)
+                sSQL = "SELECT D.IdPedidoDet, D.IdPedidoCab" _
+                    & " FROM (tbPedidosCab as C INNER JOIN tbPedidosDet as D ON C.IdPedidoCab = D.IdPedidoCab) LEFT JOIN qCServidaDet as Q ON D.IdPedidoDet = Q.IdPedidoDet" _
+                    & " WHERE C.EntregadoSN = False And C.IdCliente = " & lIdCli & " And D.IdPrendaTipoMedida = " & lIdPTM & " And ([Cantidad] - Nz(Q.CServidaDet,0)) > 0" _
+                    & " ORDER BY D.IdPedidoDet;"
+                Set rsP = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+                If rsP.EOF Then
+                    iR = MsgBox("No se encontró línea de Pedido del Cliente pendiente de servir " & DimePrendaTipoMedida(lIdPTM) & vbCrLf & "¿¿Incluir en albarán de todos modos?", vbOKCancel + vbQuestion)
+                    If iR = vbCancel Then GoTo Segi
+                End If
+                'Añade líneas de detalle
+                sSQL = "INSERT INTO tbAlbaranesEnvioDet (IdAlbaranECab,IdPackCab,IdPrecio, Concepto, Cantidad, Precio, Base, IVA, Importe)"
+                cPre = DLookup("Precio", "tbPrecios", "IdPrecio = " & lIdPre)
+                If Not bIVAinc Then
+                    cBase = cPre * rs("Cantidad")
+                    cImporte = Round(cBase * (1 + cIVA), 2)
+                Else
+                    cImporte = cPre * rs("Cantidad")
+                    cBase = cImporte / (1 + cIVA)
+                End If
+                sSQL = sSQL & " VALUES(" & lIdAECab & ", " & lIdPack & ", " & lIdPre & ", " & ConComillas(sConcepto) & ", " & ComaPunto(rs("Cantidad")) & ", " & ComaPunto(cPre) & ", " & ComaPunto(cBase) & ", " & ComaPunto(cIVA) & ", " & ComaPunto(cImporte) & ")"
+                CurrentDb.Execute sSQL, dbFailOnError
+                lIdAEDet = DMax("IdAlbaranEDet", "tbAlbaranesEnvioDet")
+                If Not rsP.EOF Then
+                    'Añade líneas de enlace entre pedidodet y albarandet
+                    sSQL = "INSERT INTO tbPDetAEDet(IdPedidoDet, IdAlbaranEDet)" _
+                        & " VALUES(" & rsP("IdPedidoDet") & ", " & lIdAEDet & ")"
+                    CurrentDb.Execute sSQL, dbFailOnError
+                    'Comprobar si el pedido está ya servido
+                    SiPedidoServidoSN_MarcarComoEntregadoSN rsP("IdPedidoCab")
+                    'If PedidoServido(rsP("IdPedidoCab")) Then
+                    '    sSQL = "UPDATE tbPedidosCab SET EntregadoSN = True WHERE IdPedidoCab = " & rsP("IdPedidoCab")
+                    '    CurrentDb.Execute sSQL, dbFailOnError
+                    'End If
+                End If
+                'Cambiar estado de prendas del pack a Cliente
+                SetPackEstado lIdPack, Cliente, lIdAECab
+                i = i + 1
+            End If
+Segi:
+            rs.MoveNext
+        Wend
+    Else
+        'IdPack es 0, el resto de parámetros deben presentarse, bueno IdServicio podría no indicarse....
+        If lIdServicio = 0 Then
+            lIdServicio = Nz(buscaayuda("SERVI", , , , , , True), 0)
+            If lIdServicio = 0 Then GoTo HandleExit
+        End If
+        sSQL = "SELECT tbPrecios.IdPrecio, Concepto, tbPrecios.Precio" _
+            & " FROM tbPrecios" _
+            & " WHERE IdServicio=" & lIdServicio & " AND IdTarifa=" & lIdTarifa & " AND IdPTM=" & rs("IdPrendaTipoMedida")
+        CurrentDb.Execute "UPDATE sysBusquedas SET strSQL = " & ConComillas(sSQL, True) & " WHERE CodBusqueda='PRECI'", dbFailOnError
+        lIdPre = Nz(buscaayuda("PRECI", , 1, , , False, True), -1)
+        If lIdPre <> -1 Then
+            sSQL = "INSERT INTO tbAlbaranesEnvioDet (IdAlbaranECab,IdPackCab, IdPrecio, Cantidad, Concepto, Precio, Base, IVA, Importe)"
+            cPre = DLookup("Precio", "tbPrecios", "IdPrecio = " & lIdPre)
+            If Not bIVAinc Then
+                cBase = cPre * iCantidad
+                cImporte = cBase * (1 + cIVA)
+            Else
+                cImporte = cPre * iCantidad
+                cBase = cImporte / (1 + cIVA)
+            End If
+            sSQL = sSQL & " VALUES(" & lIdAECab & ", " & lIdPack & ", " & lIdPre & ", " & iCantidad & ", " & ComaPunto(cPre) & ", " & ComaPunto(cBase) & ", " & ComaPunto(cIVA) & ", " & ComaPunto(cImporte) & ", " & ConComillas(DimePrendaTipoMedida(rs("IdPTM"))) & ")"
+            CurrentDb.Execute sSQL, dbFailOnError
+            i = i + 1
+        End If
+            
+'        Case 3 ' Precio Kg
+'            MsgBox "No implementado Precio Kg."
+'        Case 4 'Tarifa plana
+'            MsgBox "No implementado Tarifa Plana"
+'        End Select
+            
+            
+    End If
+    
+
+        
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Sub AbreAlbaran(lIdAECab As Long)
+    On Error GoTo HandleError
+    Dim sXML As String
+    PonXML sXML, "IdAlbaranECab", Nz(lIdAECab, 0)
+    If IsOpenForm("frmAlbaran") Then DoCmd.Close acForm, "frmAlbaran"
+    DoCmd.OpenForm "frmAlbaran", , , , , , sXML
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+
+
+Public Function IdServiciosCliente(lIdCliente As Long) As String
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset, sR As String, i As Integer, sId As String
+    sSQL = "SELECT IIf([RentingPrecioPrendaSN],'1','') & IIf([LavadoPrecioPrendaSN],'2','') & IIf([LavadoPrecioKgSN],'3','') & IIf([RentingTarifaPlanaSN],'4','') AS IdServicios" _
+        & " FROM tbClientesGrupos INNER JOIN tbCliente_Grupo ON tbClientesGrupos.IdGrupoClientes = tbCliente_Grupo.IdGrupoClientes" _
+        & " WHERE IdCliente = " & lIdCliente
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        If Len(rs("IdServicios")) > 0 Then
+            For i = 1 To Len(rs("IdServicios"))
+                sId = Mid(rs("IdServicios"), i, 1)
+                If InStr(sR, sId) = 0 Then sR = sR & sId
+            Next i
+        End If
+        rs.MoveNext
+    Wend
+    IdServiciosCliente = sR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DesgloseIVAAlbaran(lIdAECab As Long _
+                        , Optional bSaltoLinea As Boolean = False) As String
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset, sR As String
+    sSQL = "SELECT Sum(Base) as TBase, IVA, Round(Sum(Base)* IVA,2) as TIVA" _
+         & " FROM tbAlbaranesEnvioDet" _
+         & " WHERE IdAlbaranECab = " & lIdAECab _
+         & " GROUP BY IVA" _
+         & " ORDER BY IVA"
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & llenaizq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & llenaizq(Format(rs("TIVA"), "currency"), 10)
+        rs.MoveNext
+    Wend
+    If Len(sR) > 2 Then sR = Mid(sR, 3)
+    DesgloseIVAAlbaran = sR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function TotalIVAAlbaran(lIdAECab As Long) As Currency
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset, cTotalIVA As Currency
+    sSQL = "SELECT Sum(Base) as TBase, IVA, Sum(Base)* IVA as TIVA" _
+         & " FROM tbAlbaranesEnvioDet" _
+         & " WHERE IdAlbaranECab = " & lIdAECab _
+         & " GROUP BY IVA" _
+         & " ORDER BY IVA"
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        cTotalIVA = cTotalIVA + rs("TIVA")
+        rs.MoveNext
+    Wend
+    TotalIVAAlbaran = cTotalIVA
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Public Function SQL_Servicios_PTM_delGrupoCliente(lIdGrupoCliente As Long, Optional sSQL_R As String = "") As String
+    'Devuelve SQL Grupo+ServicioPTM, Precio
+    ' de los disponibles para ese Grupo Cliente
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset, i As Integer, sGrupo As String
+    sSQL = "SELECT * FROM tbClientesGrupos WHERE IdGrupoClientes = " & lIdGrupoCliente
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    If rs.EOF Then GoTo HandleExit
+    sGrupo = rs("GrupoClientes")
+    For i = 1 To 4
+        Select Case i
+            Case 1
+                If rs("RentingPrecioPrendaSN") = True Then
+                    'sSQL_R = sSQL_R & " UNION ALL SELECT  " & lIdGrupoCliente & "|" & i & "|" & IdPrecioUdRenting, '" & sGrupo & "-Renting-" &  DimePrendaTipoMedida(IdPTM) & ',  PrecioUD FROM tbPreciosUdRenting WHERE IdGrupoClientes = " & lIdGrupoCliente
+                End If
+            Case 2
+                If rs("LavadoPrecioPrendaSN") = True Then
+                    sSQL_R = sSQL_R & " UNION ALL SELECT  lIdGrupoCliente & '|' & i & '|' & IdPrecioUdLavado, '" & sGrupo & "-Lavado-' &  DimePrendaTipoMedida(IdPTM),  PrecioUD FROM tbPreciosUdLavado WHERE IdGrupoClientes = " & lIdGrupoCliente
+                End If
+            Case 3
+                If rs("LavadoPrecioKgSN") = True Then
+                    sSQL_R = sSQL_R & " UNION ALL SELECT  lIdGrupoCliente & '|' & i & '|' & IdPrecioKg, '" & sGrupo & "-Kg-' &  Concepto,  PrecioKg FROM tbPreciosKg WHERE IdGrupoClientes = " & lIdGrupoCliente
+                End If
+            Case 4
+                If rs("RentingTarifaPlanaSN") = True Then
+                    sSQL_R = sSQL_R & " UNION ALL SELECT  lIdGrupoCliente & '|' & i & '|' & IdPrecioTarifaPlana, '" & sGrupo & "-Tarifa plana-' &  DimePrendaTipoMedida(IdPTM),  PrecioTarifaPlana FROM tbPreciosTarifaPlana WHERE IdGrupoClientes = " & lIdGrupoCliente
+                End If
+        End Select
+    Next i
+    'len(" UNION ALL ")=11
+    If InStr(sSQL_R, " UNION ALL ") = 1 Then sSQL_R = Mid(sSQL_R, 12)
+    SQL_Servicios_PTM_delGrupoCliente = sSQL_R
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function SQL_Servicios_PTM_delCliente(lIdCliente As Long) As String
+    'Devuelve SQL Grupo+ServicioPTM, Precio
+    ' de los disponibles para ese Cliente
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset
+    sSQL = "SELECT IdGrupoClientes FROM tbCliente_Grupo WHERE IdCliente = " & lIdCliente
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    sSQL = ""
+    While Not rs.EOF
+        sSQL = SQL_Servicios_PTM_delGrupoCliente(rs("IdGrupoClientes"), sSQL)
+        rs.MoveNext
+    Wend
+    SQL_Servicios_PTM_delCliente = sSQL
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function PedidoServido(lIdPedidoCab As Long) As Boolean
+    On Error GoTo HandleError
+    PedidoServido = IsNull(DLookup("IdPedidoCab", "qPedidoNoServido", "IdPedidoCab = " & lIdPedidoCab))
+
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Sub SiPedidoServidoSN_MarcarComoEntregadoSN(lIdPedidoCab As Long)
+    On Error GoTo HandleError
+    Dim sSQL As String, bEntregado As Boolean, lIdOrder As Long, iR As Integer
+    bEntregado = DLookup("EntregadoSN", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab)
+    lIdOrder = Nz(DLookup("IdOrder", "tbPedidosCab", "IdPedidoCab = " & lIdPedidoCab), 0)
+    If PedidoServido(lIdPedidoCab) = True Then
+        If Not bEntregado Then
+            sSQL = "UPDATE tbPedidosCab SET EntregadoSN=True WHERE IdPedidoCab = " & lIdPedidoCab
+            CurrentDb.Execute sSQL, dbFailOnError
+            If lIdOrder <> 0 Then
+                sSQL = "UPDATE jos_eshop_orders SET order_status_id = 13 WHERE id = " & lIdOrder
+                CurrentDb.Execute sSQL, dbFailOnError
+            End If
+        End If
+    Else
+        If bEntregado Then
+            iR = MsgBox("¿Marcar pedido como pendiente de entregar?", vbYesNo + vbQuestion)
+            If iR = vbYes Then
+                sSQL = "UPDATE tbPedidosCab SET EntregadoSN=False WHERE IdPedidoCab = " & lIdPedidoCab
+                CurrentDb.Execute sSQL, dbFailOnError
+                If lIdOrder <> 0 Then
+                    sSQL = "UPDATE jos_eshop_orders SET order_status_id = 4 WHERE IdPedidoCab = " & lIdPedidoCab
+                    CurrentDb.Execute sSQL, dbFailOnError
+                End If
+            End If
+        End If
+    End If
+            
+    
+        
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Public Function IdPTM_base(lIdPTM As Long) As Long
+    'En caso de que subtipo no esté vacío-nulo, devuelve el IdPTM del mismo Tipo de Prenda y medidas que no tenga subtipo
+    'Para que al añadir un pack en un albarán se pueda asignar la entrega al PTM del pedido
+    On Error GoTo HandleError
+    Dim lR As Long
+    If Nz(DLookup("Subtipo", "tbPrendasTipoMedida", "IdPrendaTipoMedida = " & lIdPTM), "") = "" Then
+        lR = lIdPTM
+    Else
+        Dim rs As Recordset
+        Set rs = CurrentDb.OpenRecordset("SELECT IdPrendaTipo, Largo, Ancho FROM tbPrendasTipoMedida WHERE IdPrendaTipoMedida = " & lIdPTM, dbOpenSnapshot)
+        If rs.EOF Then
+            MsgBox "no se encontró IdPrendaTipoMedida = " & lIdPTM, vbExclamation
+            GoTo HandleExit
+        End If
+        lR = Nz(DLookup("IdPrendaTipoMedida", "tbPrendasTipoMedida", _
+                        "IdPrendaTipo = " & rs("IdPrendaTipo") _
+                        & " AND Largo = " & rs("Largo") _
+                        & " AND Ancho = " & rs("Ancho")), 0)
+        If lR = 0 Then
+            MsgBox "no se encontró PrendaTipoMedida sin subtipo del mismo tipo  de IdPTM = " & lIdPTM, vbExclamation
+            GoTo HandleExit
+        End If
+    End If
+    IdPTM_base = lR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function TituloAlbaran(lIdAlbECab As Long) As String
+    On Error GoTo HandleError
+    Dim sR As String
+    sR = "GarbiTxukun - Albarán Nº" & DLookup("Numero", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab) & " " & DimeCliente(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab))
+    TituloAlbaran = sR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function AlbaranFilePDF(lIdAlbECab As Long, Optional bSigned As Boolean = False) As String
+    On Error GoTo HandleError
+    Dim sR As String
+    sR = "Albarán Garbitxukun " & DLookup("Numero", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab) & IIf(bSigned, "_signed", "") & ".pdf"
+    AlbaranFilePDF = sR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
 End Function

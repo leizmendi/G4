@@ -1,0 +1,44 @@
+Option Compare Database
+Option Explicit
+
+Public Function ScriptPython(scriptName As String _
+                            , sTempOutFile As String _
+                            , ParamArray params() As Variant) As Boolean
+    ' Esta función ejecuta un script de Python con los parámetros dados
+    ' si sTempOutFile es distinto de "" debe ser el archivo de salida temporal del script, donde se guardará
+    ' lo enviado al comando print() en el script
+    
+    On Error GoTo HandleError
+    Dim pythonExe As String, command As String, sCPy As String, sParams As String
+    Dim i As Integer, exitCode As Long
+    
+    ' Ruta del ejecutable de Python
+    pythonExe = "python"
+    
+    ' Obtiene la carpeta de los scripts de Python
+    sCPy = Nz(GetParam("CarpetaScriptsPython"), "")
+    If sCPy = "" Then
+        MsgBox "Se debe indicar carpeta de Scripts Python en parámetros", vbExclamation
+        GoTo HandleExit
+    End If
+    
+    ' Construye la cadena de parámetros
+    For i = LBound(params) To UBound(params)
+        sParams = sParams & """" & params(i) & """ "
+    Next i
+    
+    ' Construye el comando para ejecutar el script de Python
+    
+    command = "cmd.exe /c " & pythonExe & " " & ConComillas(sCPy & scriptName) & " " & sParams
+    If sTempOutFile <> "" Then command = command & " > " & ConComillas(sTempOutFile)
+    
+    ' Ejecuta el comando
+    exitCode = WaitShell(command, vbNormalFocus)
+    ScriptPython = exitCode = 0
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
