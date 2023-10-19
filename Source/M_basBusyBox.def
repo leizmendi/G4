@@ -1,0 +1,78 @@
+Option Compare Database
+Option Explicit
+Global ggIntCancelarEnlace As Integer
+
+Public Function MensajeBusyBox(strMensaje, _
+                               Optional strTitulo As String = "", _
+                               Optional intclear As Integer = False, _
+                               Optional intMensajePreserve As Integer = False, _
+                               Optional bAñadirTextoDelante As Boolean = True) As String
+    On Error GoTo Error_MensajeBusyBox
+Ini:
+    DoEvents
+    MensajeBusyBox = ""
+    If intclear Then
+        If strMensaje = "" And intMensajePreserve = False Then
+            DoCmd.Close acForm, "frmBusyBox", acSaveNo
+        Else
+            If intMensajePreserve = False Then
+                Forms("frmBusyBox").txtInfo = strMensaje
+            Else
+                If bAñadirTextoDelante Then
+                    Forms("frmBusyBox").txtInfo = strMensaje & vbCrLf & Forms("frmBusyBox").txtInfo
+                Else
+                    Forms("frmBusyBox").txtInfo = Forms("frmBusyBox").txtInfo & vbCrLf & strMensaje
+                End If
+            End If
+            If strTitulo <> "" Then
+                Forms("frmBusyBox").Caption = strTitulo
+            End If
+            Forms("frmBusyBox")("btnCerrar").Visible = True
+            Forms("frmBusyBox")("btnCerrar").SetFocus
+        End If
+    Else
+        If intMensajePreserve = False Then
+            Forms("frmBusyBox").txtInfo = strMensaje
+        Else
+            If bAñadirTextoDelante Then
+                Forms("frmBusyBox").txtInfo = strMensaje & vbCrLf & Forms("frmBusyBox").txtInfo
+            Else
+                Forms("frmBusyBox").txtInfo = Forms("frmBusyBox").txtInfo & vbCrLf & strMensaje
+            End If
+        End If
+        If strTitulo <> "" Then
+            Forms("frmBusyBox").Caption = strTitulo
+        End If
+        Forms("frmBusyBox").Repaint
+        Dim ctl As Control
+        Set ctl = Forms("frmBusyBox")("txtInfo")
+        ctl.SetFocus
+        If bAñadirTextoDelante Then
+            ctl.SelStart = 0
+        Else
+            ctl.SelStart = Len(ctl.Text) - Len(strMensaje)
+        End If
+        ctl.SelLength = Len(strMensaje)
+'        If ggIntCancelarEnlace = True Then
+'            Dim intResp As Integer
+'            intResp = MsgBox("¿Cancelar el proceso?", vbYesNo + vbQuestion + vbDefaultButton2)
+'            If intResp = vbYes Then
+'                DoCmd.Close acForm, "frmBusyBox"
+'                MensajeBusyBox = "Cancel"
+'            End If
+'        End If
+    End If
+Salir_MensajeBusyBox:
+    If IsOpenForm("frmBusyBox") Then Forms("frmBusyBox").SetFocus
+    Exit Function
+Error_MensajeBusyBox:
+    Select Case Err
+        Case 2450 'el formulario no está abierto
+            DoCmd.OpenForm "frmBusyBox"
+            Resume Ini
+        Case Else
+            MsgBox "Error nº " & Err & " en MensajeBusyBox" & vbCrLf & Err.Description
+            Resume Salir_MensajeBusyBox
+            Resume Next
+    End Select
+End Function

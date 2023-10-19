@@ -431,83 +431,6 @@ Public Function ComaPunto(vNum As Variant) As String
     ComaPunto = Replace(CStr(vNum), ",", ".")
 End Function
 
-Public Sub ComprobarUpdates()
-    On Error GoTo HandleError
-    Dim sCUpdate As String, sFUpdate As String, iObjType As AcObjectType, sObjName As String
-    Dim sFImport As String, sCUpdated As String, sCSaved As String, i As Integer, f As Integer, sMsg As String
-    sCUpdate = DirectorioDe(CurrentDb.Name) & "Update"
-    If Dir(sCUpdate, vbDirectory) = "" Then MkDir sCUpdate
-    sCUpdate = sCUpdate & "\"
-    
-    Dim sFiles As String, vFiles As Variant
-    sFUpdate = Dir(sCUpdate & "*.def")
-    While sFUpdate <> ""
-        sFiles = sFiles & "," & sFUpdate
-        sFUpdate = Dir()
-    Wend
-    If sFiles = "" Then GoTo HandleExit
-    
-    sCUpdated = sCUpdate & "Updated"
-    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
-    sCUpdated = sCUpdated & "\" & Format(Date, "yyyy_mm_dd")
-    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
-    sCUpdated = sCUpdated & "\"
-    
-    sCSaved = sCUpdate & "Saved"
-    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
-    sCSaved = sCSaved & "\" & Format(Date, "yyyy_mm_dd")
-    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
-    sCSaved = sCSaved & "\"
-    
-    
-    sFiles = Mid(sFiles, 2)
-    vFiles = Split(sFiles, ",")
-    For f = 0 To UBound(vFiles)
-        sFUpdate = vFiles(f)
-        Select Case Left(sFUpdate, 2)
-            Case "F_"
-                iObjType = acForm
-            Case "R_"
-                iObjType = acReport
-            Case "Q_"
-                iObjType = acQuery
-            Case "S_"
-                iObjType = acMacro
-            Case "M_"
-                iObjType = acModule
-            Case Else
-                MsgBox "No se reconoció el tipo de archivo a importar: " & sFUpdate, vbExclamation
-                GoTo HandleExit
-        End Select
-        i = InStrRev(sFUpdate, ".")
-        sObjName = Mid(sFUpdate, 3, i - 3)
-        SysCmd acSysCmdSetStatus, "Actualizando " & f + 1 & "/" & UBound(vFiles) + 1 & " : " & sFUpdate
-        If Dir(sCSaved & sFUpdate) <> "" Then
-            i = 0
-            While Dir(sCSaved & sFUpdate & "_" & i) <> ""
-                i = i + 1
-            Wend
-            FileCopy sCSaved & sFUpdate, sCSaved & sFUpdate & "_" & i
-        End If
-        On Error Resume Next
-        SaveAsText iObjType, sObjName, sCSaved & sFUpdate
-        On Error GoTo HandleError
-        LoadFromText iObjType, sObjName, sCUpdate & sFUpdate
-        sMsg = sMsg & ", " & sObjName
-        FileCopy sCUpdate & sFUpdate, sCUpdated & sFUpdate
-        Kill sCUpdate & sFUpdate
-    Next f
-    SysCmd acSysCmdClearStatus
-    sMsg = Mid(sMsg, 3)
-    MsgBox "Se actualizaron " & f & " objetos: " & sMsg, vbInformation, "Actualizado H4"
-    
-HandleExit:
-    Exit Sub
-HandleError:
-    MsgBox Err.Description
-    Resume HandleExit
-End Sub
-
 Public Sub aaExportarModuloActual()
     On Error GoTo HandleError
 
@@ -535,3 +458,153 @@ HandleError:
     MsgBox Err.Description
     Resume HandleExit
 End Sub
+
+Public Sub ComprobarUpdates()
+    On Error GoTo HandleError
+    Dim sCUpdate As String, sFUpdate As String, iObjType As AcObjectType, sObjName As String
+    Dim sFImport As String, sCUpdated As String, sCSaved As String, i As Integer, f As Integer, sMsg As String
+    Dim bScript As Boolean, bTitle As Boolean, sTitle As String
+    sCUpdate = DirectorioDe(CurrentDb.Name) & "Update"
+    If Dir(sCUpdate, vbDirectory) = "" Then MkDir sCUpdate
+    sCUpdate = sCUpdate & "\"
+    
+    Dim sFiles As String, vFiles As Variant
+    sFUpdate = Dir(sCUpdate & "*.def")
+    While sFUpdate <> ""
+        sFiles = sFiles & "," & sFUpdate
+        sFUpdate = Dir()
+    Wend
+    If sFiles = "" Then GoTo HandleExit
+    
+    sCUpdated = sCUpdate & "Updated"
+    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
+    sCUpdated = sCUpdated & "\" & Format(Date, "yyyy_mm_dd")
+    If Dir(sCUpdated, vbDirectory) = "" Then MkDir sCUpdated
+    sCUpdated = sCUpdated & "\"
+    
+    sCSaved = sCUpdate & "Saved"
+    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
+    sCSaved = sCSaved & "\" & Format(Date, "yyyy_mm_dd")
+    If Dir(sCSaved, vbDirectory) = "" Then MkDir sCSaved
+    sCSaved = sCSaved & "\"
+      
+    
+    sFiles = Mid(sFiles, 2)
+    vFiles = Split(sFiles, ",")
+    For f = 0 To UBound(vFiles)
+        bScript = False
+        sFUpdate = vFiles(f)
+        Select Case Left(sFUpdate, 2)
+            Case "F_"
+                iObjType = acForm
+            Case "R_"
+                iObjType = acReport
+            Case "Q_"
+                iObjType = acQuery
+            Case "S_"
+                iObjType = acMacro
+            Case "M_"
+                iObjType = acModule
+            Case "K_"
+                bScript = True
+            Case "T_"
+                bTitle = True
+                sTitle = Mid(sFUpdate, 3, Len(sFUpdate) - 6)
+            Case Else
+                MsgBox "No se reconoció el tipo de archivo a importar: " & sFUpdate, vbExclamation
+                GoTo HandleExit
+        End Select
+        i = InStrRev(sFUpdate, ".")
+        sObjName = Mid(sFUpdate, 3, i - 3)
+        MensajeBusyBox "Actualizando " & f + 1 & "/" & UBound(vFiles) + 1 & " : " & sFUpdate, "Actualizando H4", , True
+        If Dir(sCSaved & sFUpdate) <> "" Then
+            i = 0
+            While Dir(sCSaved & sFUpdate & "_" & i) <> ""
+                i = i + 1
+            Wend
+            FileCopy sCSaved & sFUpdate, sCSaved & sFUpdate & "_" & i
+        End If
+        If Not bScript And Not bTitle Then
+            SaveAsText iObjType, sObjName, sCSaved & sFUpdate
+            LoadFromText iObjType, sObjName, sCUpdate & sFUpdate
+        ElseIf bScript Then
+            ExecuteAllScriptsFromJSON sCUpdate & sFUpdate
+        Else ' bTitle
+            'Application.SetOption "App Title", sTitle
+            SetAppTitle sTitle
+        End If
+        sMsg = sMsg & ", " & sObjName
+        FileCopy sCUpdate & sFUpdate, sCUpdated & sFUpdate
+        Kill sCUpdate & sFUpdate
+    Next f
+    sMsg = Mid(sMsg, 3)
+    MensajeBusyBox "Se actualizaron " & f & " objetos: " & sMsg, "Actualizado H4", True
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Sub ExecuteAllScriptsFromJSON(jsonPath As String)
+    On Error GoTo HandleError
+    Dim fso As Object
+    Dim TextFile As Object
+    Dim FileContent As String
+    Dim json As Object
+    Dim Key As Variant
+    Dim Script As String
+    
+    'Crear un nuevo objeto FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    'Abrir el archivo
+    Set TextFile = fso.OpenTextFile(jsonPath, 1)
+    'Leer el contenido del archivo
+    FileContent = TextFile.ReadAll
+    'Cerrar el archivo
+    TextFile.Close
+    
+    'Deserializar el JSON
+    'Dim jsc As New JsonConverter
+    Set json = ParseJson(FileContent)
+    
+    'Recorrer todas las claves del diccionario JSON
+    For Each Key In json.Keys
+        Script = json(Key)
+        Script = Replace(Script, "''", """")
+        'Ejecutar el script en la base de datos u otro sistema
+        'Nota: Asegúrate de que es seguro ejecutar el script antes de hacerlo.
+        'Por motivos de seguridad, deberías verificar y limpiar cualquier input que vaya a ser ejecutado.
+        On Error Resume Next
+        CurrentDb.Execute Script, dbFailOnError
+        If Err.Number <> 0 Then
+            MsgBox "Error al ejecutar el script de la clave " & Key & ": " & Err.Description, vbExclamation
+            Err.Clear
+        End If
+        On Error GoTo HandleError
+    Next Key
+    
+    'Limpiar
+    Set fso = Nothing
+    Set TextFile = Nothing
+    Set json = Nothing
+    
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Function SetAppTitle(newTitle As String)
+    On Error Resume Next
+    CurrentDb.Properties("AppTitle") = newTitle
+    If Err.Number = 3270 Then ' Property not found.
+        CurrentDb.Properties.Append _
+        CurrentDb.CreateProperty("AppTitle", dbText, newTitle)
+    End If
+    On Error GoTo 0
+    Application.RefreshTitleBar
+End Function
