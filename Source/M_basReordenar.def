@@ -2,7 +2,7 @@ Option Compare Database
 Option Explicit
 
 Public Sub Reordenar(strFrom As String, strCampo As String, _
-                     Optional strWhere As String = "*", _
+                     Optional strWHERE As String = "*", _
                      Optional intPaso As Integer = 1, _
                      Optional intIni As Long = 0, _
                      Optional strOrderBy As String = "", _
@@ -12,8 +12,8 @@ Public Sub Reordenar(strFrom As String, strCampo As String, _
     Dim rs As Recordset, strSQL As String, i As Long
     
     strSQL = "SELECT " & strSELECT & " FROM " & strFrom
-    If strWhere <> "*" Then
-        strSQL = strSQL & " WHERE " & strWhere
+    If strWHERE <> "*" Then
+        strSQL = strSQL & " WHERE " & strWHERE
     End If
     If strOrderBy = "" Then strOrderBy = strCampo
     strSQL = strSQL & " ORDER BY " & strOrderBy

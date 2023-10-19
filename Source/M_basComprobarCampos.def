@@ -99,11 +99,11 @@ Public Function Añadir_Campo(strTabla As String, strNombreCampo As String, intTi
         Set fld = tdf.CreateField(strNombreCampo, intTipo, intSize)
     End If
     Dim strPropName As String, intPropType As Integer, vValor
-    strPropName = Nz(DimeXML(strPropiedadXML, "Propiedad"), "")
+    strPropName = Nz(dimexml(strPropiedadXML, "Propiedad"), "")
     tdf.Fields.Append fld
     If strPropName <> "" Then
-        intPropType = Nz(DimeXML(strPropiedadXML, "Tipo"), 0)
-        vValor = Nz(DimeXML(strPropiedadXML, "Valor"), "")
+        intPropType = Nz(dimexml(strPropiedadXML, "Tipo"), 0)
+        vValor = Nz(dimexml(strPropiedadXML, "Valor"), "")
         SetProperty fld, strPropName, intPropType, vValor
     End If
     
@@ -123,7 +123,6 @@ Error_Añadir_Campo:
         Case Else
             MsgBox "Error nº " & Err & " en Añadir_Campo" & vbCrLf & Err.Description
             strMensaje = "NO se pudo añadir el campo " & strNombreCampo & " en la tabla " & strTabla & " en " & strMDB
-
             On Error Resume Next
             db.Close
             Añadir_Campo = False

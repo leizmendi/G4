@@ -1,4 +1,5 @@
 
+
 Option Compare Database
 Option Explicit
 
@@ -272,7 +273,7 @@ Public Function GetDocumentStatus(documentId As String, Optional ByRef dtSigned 
 
     Dim oHttp As MSXML2.XMLHTTP60, sR As String
     Set oHttp = New MSXML2.XMLHTTP60
-    
+    dtSigned = 0
     With oHttp
         .Open "GET", BASE_URL & "Document/Status/" & documentId & "?rnd=" & Rnd(), False
         ' Si la API requiere autenticación u otras cabeceras, las añades aquí
@@ -326,7 +327,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
 End Function
 
 Function RetrieveSignedDocument(documentId As String, ByRef bResponse() As Byte, ByRef sMsg As String) As Boolean
@@ -381,7 +382,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
 End Function
 
 ' Necesitas una función para parsear JSON si quieres obtener detalles de los errores
@@ -583,18 +584,20 @@ Public Sub ActualizarEstadosAlbaran(IdAlbaranECab As Long)
             documentId = rs("FolDocumentId")
             lIdAD = rs("IdAlbaranDispositivo")
             
+            
             ' Llama a la función para obtener el estado
+            dtSigned = 0
             Estado = GetDocumentStatus(documentId, dtSigned)
             
             ' Actualiza el campo Estado en la tabla tbAlbaranes_Dispositivo
             strSQL = "UPDATE tbAlbaranes_Dispositivo SET Status = '" & Estado & "'"
-            If dtSigned <> 0 Then strSQL = strSQL & ", FechaFirmado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn") & "#"
+            If dtSigned <> 0 Then strSQL = strSQL & ", FechaFirmado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn:ss") & "#"
             strSQL = strSQL & " WHERE IdAlbaranDispositivo = " & lIdAD
             CurrentDb.Execute strSQL, dbFailOnError
             If dtSigned <> 0 Then
                 If Nz(DLookup("file_pdf", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAD), "") = "" Then
                     'Marca la fecha de entrega del albarán
-                    strSQL = "UPDATE tbAlbaranesEnvioCab SET FechaEntregado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn") & "#" _
+                    strSQL = "UPDATE tbAlbaranesEnvioCab SET FechaEntregado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn:ss") & "#" _
                             & " WHERE IdAlbaranECab = " & IdAlbaranECab
                     CurrentDb.Execute strSQL, dbFailOnError
                     'Descarga el documento firmado

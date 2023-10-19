@@ -47,9 +47,8 @@ Public Sub BloqueoFormulario(frm As Form, Optional ByRef intLock As Integer = 22
     End Select
     Select Case frm.Name
         'formularios donde no se modifica la propiedad AllowEdits ..........
-        Case "frmProyecto", "frmDoc", "frmEmpleadosFML", "frmApoyo", "frmRBDA", "frmRBDA_PreciosCab", "frmClientes", "frmPedidoEdit", "frmRBDA_Edit"
         Case Else
-            frm.AllowEdits = Not intLock
+            'frm.AllowEdits = Not intLock
     End Select
     
     For Each ctl In frm.Controls

@@ -1,0 +1,1068 @@
+Option Compare Database
+Option Explicit
+Dim FILESQL As String '= "C:\SQL.txt"
+Global gintYa As Integer
+Global gintFileOpen As Integer
+Global gint_auxListado1_2 As Integer
+Dim strPathPrintTeam As String
+Dim strPathPrintPort As String
+Dim strError As String
+Dim strgLinea As String
+Dim strgMargen As String
+Dim intgCampos As Integer
+Dim intgImpr() As Integer, intgAnch() As Integer, intgAlin() As Integer, intgForm() As Integer, intgTotal() As Integer, intgSubTotal() As Integer
+Dim gdobSumTotal() As Double, gdSubTotal() As Double
+Dim intgCambiaAcentos As Integer
+Dim gstrPreData As String, gintBloc As Integer, gintauxListado As Integer
+
+Public Function ImprimirSQL_DOS1(strSQL As String, strTitulo As String, strOtros As String, Optional intImprimirYa As Integer = True _
+                                , Optional strPreData As String, Optional intFBloc As Integer = 88, Optional intSoloTitulo As Integer = False _
+                                , Optional ByRef strFile As String = "", Optional strSQL_TOTAL As String = "", Optional intNoMostrarEnPantalla As Integer = False)
+    On Error GoTo Error_ImprimirSQL_DOS1
+    Dim v As Variant
+    Dim strImpresora As String, intCabe As Integer, intMargSup As Integer
+    Dim intMargIzQ As Integer, intLinDet As Integer, intNumCop As Integer
+    Dim intCompri As Integer, strCarpetaListados As String
+    If strFile = "" Then
+        If Not intSoloTitulo Then
+            strFile = Replace(strTitulo, vbCr, "_")
+        Else
+            strFile = Replace(Left(strTitulo, 50), vbCr, "_")
+        End If
+        strFile = Replace(strFile, vbLf, "")
+        strFile = NombreFicheroValido(strFile)
+        'strFile = Replace(strTitulo, " ", "_")
+    End If
+    strCarpetaListados = Nz(GetParam("CarpetaListados"), "")
+    If strCarpetaListados = "" Then
+        strCarpetaListados = DirectorioDe(CurrentDb.Name) & "Listados"
+        PonValorParam "ListadosCarpeta", strCarpetaListados, 10
+    End If
+    If Dir(strCarpetaListados, vbDirectory) = "" Then MkDir strCarpetaListados
+    If Right(strCarpetaListados, 1) <> "\" Then strCarpetaListados = strCarpetaListados & "\"
+    
+    
+    FILESQL = strCarpetaListados & strFile & ".txt" '& "SQL.txt"
+    strFile = FILESQL
+    
+    ReDim intgImpr(1) As Integer
+    ReDim intgAnch(1) As Integer
+    ReDim intgAlin(1) As Integer
+    ReDim intgForm(1) As Integer
+    ReDim intgTotal(1) As Integer
+    ReDim intgSubTotal(1) As Integer
+    ReDim gdobSumTotal(1) As Double
+    If intFBloc = 88 Then
+        gintBloc = Nz(GetParam("ImprimirAlBlocDeNotas"), False)
+    Else
+        gintBloc = intFBloc
+    End If
+    gintYa = intImprimirYa
+    gstrPreData = strPreData
+    If True Then 'Nz(getparam("ListadosImpresionPor"), 2) = 2 Then
+        v = GetParam("ListadosImpresora")
+        If IsNull(v) Or v = "" Then
+            'MsgBox "Se debe indicar impresora DOS de Listados"
+            'DoCmd.OpenForm "frmParametrosListados"
+            'Exit Function
+        Else
+            strImpresora = CStr(v)
+        End If
+        If gintBloc = False Then
+            gintBloc = Nz(GetParam("ImprimirAlBlocDeNotas_" & strImpresora), False)
+            intgCambiaAcentos = Nz(DLookup("CambiarAcentos", "cfgImpresoras", "NombreImpresora = '" & strImpresora & "'"), 0)
+            'CargarCodigosEscape strImpresora 'se cargan después
+            strPathPrintTeam = DLookup("NombrePuesto", "cfgImpresoras", "NombreImpresora = '" & strImpresora & "'")
+            strPathPrintPort = Nz(DLookup("Puerto", "cfgImpresoras", "NombreImpresora = '" & strImpresora & "'"), "")
+        End If
+        'intgCambiaAcentos = False
+        ''CargarCodigosEscape strImpresora 'se cargan después
+        'strPathPrintTeam = DLookup("NombrePuesto", "cfgImpresoras", "NombreImpresora = '" & strImpresora & "'")
+        'strPathPrintPort = Nz(DLookup("Puerto", "cfgImpresoras", "NombreImpresora = '" & strImpresora & "'"), "")
+    Else
+        gintauxListado = True
+    End If
+    
+    intCabe = CInt(Nz(GetParam("ListadosCabeceraSN"), False))
+    intMargSup = CInt(Nz(GetParam("ListadosMargenSup"), 0))
+    intMargIzQ = CInt(Nz(GetParam("ListadosMargenIzdo"), 0))
+    intLinDet = CInt(Nz(GetParam("ListadosLineasDetalle"), 0))
+    intNumCop = CInt(Nz(GetParam("ListadosNumCopias"), 1))
+    intCompri = CInt(Nz(GetParam("ListadosLetraCN"), 1))
+    ImprimirSQL_DOS2 strSQL, strTitulo, strImpresora, intCabe, intMargSup, intMargIzQ, intLinDet, intNumCop, intCompri, strOtros, intSoloTitulo, strSQL_TOTAL, intNoMostrarEnPantalla
+    ImprimirSQL_DOS1 = True
+Salir_ImprimirSQL_DOS1:
+    Exit Function
+Error_ImprimirSQL_DOS1:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en ImprimirSQL_DOS1" & vbCrLf & Err.Description
+            Resume Salir_ImprimirSQL_DOS1
+    End Select
+End Function
+
+Public Function ImprimirSQL_DOS2(strSQL As String, strTitulo As String, strImpresora As String, intCabe As Integer, intMargSup As Integer, intMargIzQ As Integer, intLinDet As Integer _
+                , intNumCop As Integer, intCompri As Integer, strOtros As String, Optional intSoloTitulo As Integer = False, Optional strSQL_TOTAL As String = "" _
+                , Optional intNoMostrarEnPantalla As Integer = False)
+'el parámetro strOtros se utiliza como sigue:
+'nnn..,oooooo..,ppp..,qqq...,rrr...
+'n: es un valor de un dígito 0/1 que indica si se imprime la columna correspondiente al la posicion , ej: 101, ...-> se imprimen las columnas 1ª y 3ª, la 2ª no.
+'oo: valor de dos dígitos donde se indica la anchura de la columna correspondiente (hay que ocupar los de las columnas que no se  impriman, ej: 101,100018,... la 1ª columna tiene una anchura de 10 caracteres y la 3ª de 18
+'p: valor de un dígito que indica la alineación de los valores en la columna: 1= alin. izquierda, 2 = centrada, 3 = derecha
+'q: valor de un dígito que indica el formato de los datos: 1: sin formato, 2: Pts., 3: €, 4: #.##0, 5: dd/mm/yy, 6: %,00 , 7: % , 8: #.##0,00
+'r: es un valor de un dígito 0/1 que indica si se calcula total de la columna correspondiente al la posicion EN LA PRIMERA COLUMNA NO SE CALCULA TOTAL
+'Si la SQL tiene más columnas que las indicadas en strOtros, las columnas restantes repiten los valores de parámetros de la última columna.
+
+    Dim rs As Recordset
+    Dim i As Integer, k As Integer, intC1 As Integer, intC2 As Integer, intC3 As Integer, intC4 As Integer, intC5 As Integer
+    On Error GoTo Error_ImprimirSQL_DOS
+    CargarCodigosEscape strImpresora, gintBloc Or gintauxListado
+    If gintFileOpen = False Then
+        Open FILESQL For Output As #1
+        gintFileOpen = True
+        
+    End If
+    If Not (gintBloc Or gintauxListado) Then Print #1, IIf(intCompri = 1, seCOMPRI, seNORMAL)
+    If intSoloTitulo = True Then GoTo Cabecera
+    Set rs = CurrentDb.OpenRecordset(strSQL)
+    intgCampos = rs.Fields.Count
+    ReDim intgImpr(1 To intgCampos) As Integer
+    ReDim intgAnch(1 To intgCampos) As Integer
+    ReDim intgAlin(1 To intgCampos) As Integer
+    ReDim intgForm(1 To intgCampos) As Integer
+    ReDim intgTotal(1 To intgCampos) As Integer
+    ReDim intgSubTotal(1 To intgCampos) As Integer
+    ReDim gdobSumTotal(1 To intgCampos) As Double
+    ReDim gdSubTotal(1 To intgCampos) As Double
+    intC1 = InStr(1, strOtros, ",")
+    intC2 = InStr(intC1 + 1, strOtros, ",")
+    intC3 = InStr(intC2 + 1, strOtros, ",")
+    intC4 = InStr(intC3 + 1, strOtros, ",")
+    intC5 = InStr(intC4 + 1, strOtros, ",")
+    For i = 1 To intgCampos
+        If k = 0 Then
+            If Mid(strOtros, i, 1) = "," Then k = i - 1
+        End If
+        If k > 0 Then
+            intgImpr(i) = CInt(Mid(strOtros, k, 1))
+            intgAnch(i) = CInt(Mid(strOtros, intC1 + 1 + (k - 1) * 2, 2))
+            intgAlin(i) = CInt(Mid(strOtros, intC2 + k, 1))
+            intgForm(i) = CInt(Mid(strOtros, intC3 + k, 1))
+            intgTotal(i) = CInt(Mid(strOtros, intC4 + k, 1))
+            If intC5 <> 0 Then intgSubTotal(i) = CInt(Mid(strOtros, intC5 + k, 1))
+        Else
+            intgImpr(i) = CInt(Mid(strOtros, i, 1))
+            intgAnch(i) = CInt(Mid(strOtros, intC1 + 1 + (i - 1) * 2, 2))
+            intgAlin(i) = CInt(Mid(strOtros, intC2 + i, 1))
+            intgForm(i) = CInt(Mid(strOtros, intC3 + i, 1))
+            intgTotal(i) = CInt(Mid(strOtros, intC4 + i, 1))
+            If intC5 <> 0 Then intgSubTotal(i) = CInt(Mid(strOtros, intC5 + i, 1))
+        End If
+    Next i
+Cabecera:
+    If ImprimirCabeceraSQL(rs, strTitulo, intCabe, intMargSup, intMargIzQ, , intSoloTitulo) = False Then
+        ImprimirSQL_DOS2 = False
+        Close
+        gintFileOpen = False
+        GoTo Salir_ImprimirSQL_DOS
+    End If
+    If intSoloTitulo = True Then GoTo Cierre
+    If ImprimirDetalleSQL(rs, strTitulo, intCabe, intMargSup, intMargIzQ, intLinDet, strSQL_TOTAL) = False Then
+        ImprimirSQL_DOS2 = False
+        Close
+        gintFileOpen = False
+        GoTo Salir_ImprimirSQL_DOS
+    End If
+Cierre:
+    Dim intCorte As Integer
+    intCorte = Nz(DameValorParam("TicketsCortePapel"), False)
+    Print #1, seSaltPg;
+    If gintYa Then
+        If intCorte Then
+            'If Not (gintBloc Or gintauxListado) Then Call CortePapel(1)
+        End If
+        Close
+        gintFileOpen = False
+        
+        If gintBloc = True Then
+            If Not intNoMostrarEnPantalla Then Shell "Notepad " & FILESQL, vbNormalFocus
+        ElseIf gintauxListado Then
+            ListadoSQL FILESQL, ExtraeLin(strTitulo, 1)
+            'PonValorParam IIf(gint_auxListado1_2 = 2, "rptListado2Cabecera", "rptListadoCabecera"), ExtraeLin(strTitulo, 1)
+            DoCmd.OpenReport IIf(gint_auxListado1_2 = 2, "rptListado2", "rptListado"), IIf(Nz(DameValorParam("ImpresionInformes"), 1) = 1, acViewNormal, acViewPreview)
+        ElseIf gintBloc = -2 Then
+            ListadoSQL FILESQL
+            DoCmd.OpenQuery IIf(gint_auxListado1_2 = 2, "qryListado2", "qryListado"), , acEdit
+        Else
+            'ImprimirDOS FILESQL, strPathPrintTeam & strPathPrintPort
+            ImprimirDOS FILESQL, strPathPrintPort
+        End If
+    End If
+
+Salir_ImprimirSQL_DOS:
+    Exit Function
+Error_ImprimirSQL_DOS:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description & vbCrLf & "En ImprimirSQLDOS2"
+            
+    End Select
+    Close
+    gintFileOpen = False
+    Resume Salir_ImprimirSQL_DOS
+    Resume Next
+    
+End Function
+
+Private Function ImprimirCabeceraSQL(rs As Recordset, strTitulo As String, intCabe As Integer, intMargSup As Integer, intMargIzQ As Integer, Optional intPag As Integer, Optional intSoloTitulo As Integer = False) As Integer
+    Dim i As Integer, intPaso As Integer, j As Integer
+    Dim strMiCab As String
+    On Error GoTo Error_ImprimirCabeceraSQL
+    
+    If intCabe = True Then
+        strMiCab = Nz(DameValorParam("CabeceraListados"), "")
+    Else
+        strMiCab = ""
+    End If
+    If intMargSup > 0 Then
+        For i = 1 To intMargSup
+            Print #1, seReturn;
+        Next i
+    End If
+    If intMargIzQ > 0 Then
+        strgMargen = Space(intMargIzQ)
+    Else
+        strgMargen = ""
+    End If
+    strgLinea = strgMargen & seSubrayON & ExtraeLin(strTitulo, 1) & seSubrayOFF & LlenaIzq(IIf(intPag > 0, "Pag. " & intPag, " "), 30) '& LlenaIzq(Format(Date, "dd/mm/yyyy"), 15)
+    ImprimeLinea
+    j = LineasDeStr(strTitulo)
+    If j > 1 Then
+        For i = 2 To j
+            strgLinea = strgMargen & seSubrayON & ExtraeLin(strTitulo, i) & seSubrayOFF
+            ImprimeLinea
+        Next i
+    End If
+    For i = 1 To 3
+        strgLinea = strgMargen & Llena(ExtraeLin(strMiCab, i), 30)
+        ImprimeLinea
+    Next i
+    
+    If Len(gstrPreData) > 0 Then
+        strgLinea = gstrPreData
+        ImprimeLinea
+    End If
+    If intSoloTitulo = True Then GoTo FinCabecera
+    'Print #1, seReturn
+    strgLinea = strgMargen
+    intPaso = 1
+    For intPaso = 1 To 3
+        For i = 1 To intgCampos
+            If intgImpr(i) <> 0 Then
+                If intPaso = 1 Or intPaso = 3 Then
+                    strgLinea = strgLinea & LlenaChar("_", intgAnch(i)) & " "
+                Else
+                    strgLinea = strgLinea & Centra(rs.Fields(i - 1).Name, intgAnch(i)) & " "
+                End If
+            End If
+        Next i
+        strgLinea = Left(strgLinea, Len(strgLinea) - 1)
+        ImprimeLinea
+        strgLinea = strgMargen
+    Next intPaso
+    'Print #1,
+FinCabecera:
+    Print #1,
+    ImprimirCabeceraSQL = True
+Salir_ImprimirCabeceraSQL:
+    Exit Function
+Error_ImprimirCabeceraSQL:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description & vbCrLf & "En ImprimirCabeceraSQL"
+    End Select
+    Resume Salir_ImprimirCabeceraSQL
+End Function
+
+
+Private Function ImprimirDetalleSQL(rs As Recordset, strTitulo As String, intCabe As Integer, intMargSup As Integer, intMargIzQ As Integer, intLinDet As Integer, Optional strSQL_TOTAL As String = "")
+    Dim i As Integer, intPag As Integer, j As Integer, k As Integer
+    Dim Dato As Variant, iST As Integer, vAntST As Variant, intAlMenos1ST As Integer, vTotales As String
+    On Error GoTo Error_ImprimirDetalleSQL
+    If Not rs.EOF Then
+        rs.MoveLast
+        rs.MoveFirst
+    End If
+    intPag = 1
+    For k = 0 To intgCampos - 1
+        If intgSubTotal(k + 1) = 1 Then ' subtotales al cambiar este campo
+            iST = k + 1
+            Exit For
+        End If
+    Next k
+    vAntST = Null
+    While Not rs.EOF
+        i = i + 1
+        j = j + 1
+        If i >= intLinDet And rs.RecordCount > j And intLinDet <> 0 Then
+            Print #1, strgMargen & Llena(".", 55) & "Sigue"
+            Print #1, seSaltPg;
+            intPag = intPag + 1
+            ImprimirCabeceraSQL rs, strTitulo, intCabe, intMargSup, intMargIzQ, intPag
+            i = 0
+        End If
+        If iST <> 0 Then
+            If rs(iST - 1) <> vAntST And Not IsNull(vAntST) Then
+                vTotales = ";"
+                For k = 1 To intgCampos
+                    'vTotales = vTotales & ComaPunto(gdSubTotal(k)) & ";"
+                    vTotales = vTotales & gdSubTotal(k) & ";"
+                Next k
+                'vTotales = RecDerTop(vTotales, 1, 0)
+                ImprimirTotalSQL , vTotales
+                ReDim gdSubTotal(1 To intgCampos) As Double
+                intAlMenos1ST = True
+            End If
+            vAntST = rs(iST - 1)
+        End If
+        strgLinea = strgMargen
+        For k = 0 To intgCampos - 1
+            If intgTotal(k + 1) <> 0 Then ' acumula totales
+                gdobSumTotal(k + 1) = gdobSumTotal(k + 1) + IIf(IsNumeric(rs(k)), rs(k), 0)
+                gdSubTotal(k + 1) = gdSubTotal(k + 1) + IIf(IsNumeric(rs(k)), rs(k), 0)
+            End If
+            If intgImpr(k + 1) <> 0 Then
+                Select Case intgForm(k + 1)
+                    Case 1, 9
+                        Dato = CStr(NoNulo(rs(k)))
+                        If intgForm(k + 1) = 9 Then
+                            Dato = ExtraeLin(Dato, 1)
+                        End If
+                    Case 2 ' horas minutos
+                        If Not IsDate(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k), "HH:NN")
+                        End If
+                    Case 3
+                        If Not IsNumeric(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k), "#,##0.00") & " €"
+                        End If
+                    Case 4
+                        If Not IsNumeric(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            If rs(k) = 0 Then
+                                Dato = "-"
+                            Else
+                                Dato = Format(rs(k), "#,##0")
+                            End If
+                        End If
+                    Case 5
+                        If Not IsDate(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k), "dd/mm/yy")
+                        End If
+                    Case 6
+                        If Not IsNumeric(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k) * 100, "0.00") & "%"
+                        End If
+                    Case 7
+                        If Not IsNumeric(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k) * 100, "0.0") & "%"
+                        End If
+                    Case 8
+                        If Not IsNumeric(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k), "#,##0.00")
+                        End If
+                    Case 9
+                        If Not IsDate(rs(k)) Then
+                            Dato = CStr(NoNulo(rs(k)))
+                        Else
+                            Dato = Format(rs(k), "yyyy/mm")
+                        End If
+                End Select
+                
+                Select Case intgAlin(k + 1)
+                    Case 1
+                        strgLinea = strgLinea & Llena(NoNulo(Dato), intgAnch(k + 1))
+                    Case 2
+                        strgLinea = strgLinea & Centra(NoNulo(Dato), intgAnch(k + 1))
+                    Case 3
+                        strgLinea = strgLinea & LlenaIzq(NoNulo(Dato), intgAnch(k + 1))
+                End Select
+                strgLinea = strgLinea & " "
+            End If
+            
+        Next k
+        ImprimeLinea
+        rs.MoveNext
+    Wend
+    
+    If intAlMenos1ST = True Then
+        vTotales = ";"
+        For k = 1 To intgCampos
+            'vTotales = vTotales & ComaPunto(gdSubTotal(k)) & ";"
+            vTotales = vTotales & gdSubTotal(k) & ";"
+        Next k
+        ImprimirTotalSQL , vTotales
+    End If
+    ImprimirTotalSQL strSQL_TOTAL
+    i = i + 3
+    While i <= intLinDet
+        Print #1, seReturn;
+        i = i + 1
+    Wend
+    ImprimirDetalleSQL = True
+    
+Salir_ImprimirDetalleSQL:
+    Exit Function
+Error_ImprimirDetalleSQL:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description & vbCrLf & "En ImprimirDetalleSQL"
+    End Select
+    Resume Salir_ImprimirDetalleSQL
+
+End Function
+
+Private Sub ImprimeLinea()
+    If intgCambiaAcentos = True And gintBloc = False Then
+        If Nz(DameValorParam("ListadosDetalleRemarcadoSN"), False) = True Then strgLinea = seRemarcON & strgLinea & seRemarcOFF
+        Print #1, CambiaAcentos(strgLinea)
+    Else
+        Print #1, strgLinea
+    End If
+End Sub
+
+Public Sub ImprimirTotalSQL(Optional strSQL_TOTAL As String = "", Optional vTotales As String = "")
+    On Error GoTo HandleError
+    Dim i As Integer, j As Integer
+    Dim Dato As String
+    'Dim totales() As Double
+    'ReDim totales(1 To intgCampos) As Double
+    Dim Totales As Variant
+    strgLinea = strgMargen
+    For i = 1 To intgCampos
+        If intgTotal(i) <> 0 Then
+            GoTo SegiImprimirTotalSQL
+        End If
+    Next i
+    Exit Sub
+        
+SegiImprimirTotalSQL:
+    If vTotales = "" Then
+        Dim strPCms As String
+        For i = 1 To intgCampos
+            strPCms = strPCms & ";"
+        Next i
+        Totales = Split(strPCms, ";")
+    End If
+    If vTotales <> "" Then
+        Totales = Split(vTotales, ";")
+    ElseIf strSQL_TOTAL <> "" Then
+        Dim rs As Recordset
+        Set rs = CurrentDb.OpenRecordset(strSQL_TOTAL, dbOpenSnapshot)
+        If Not rs.EOF Then
+            For i = 2 To intgCampos
+                Totales(i) = Nz(rs(i - 1), 0)
+            Next i
+        End If
+        Set rs = Nothing
+    Else
+        For i = 1 To intgCampos
+            Totales(i) = gdobSumTotal(i)
+        Next i
+    End If
+    
+    strgLinea = strgMargen
+    For i = 1 To intgCampos
+        If intgImpr(i) <> 0 Then
+            strgLinea = strgLinea & LlenaChar("_", intgAnch(i)) & " "
+        End If
+    Next i
+    strgLinea = Left(strgLinea, Len(strgLinea) - 1)
+    ImprimeLinea
+    If Not (gintBloc Or gintauxListado) Then Print #1, seRemarcON;
+    'Ver el primer campo que se imprime si es de totales o no ----> ara poner en la primera columna TOTALES
+    For i = 1 To intgCampos
+        If intgImpr(i) <> 0 Then
+            Exit For
+        End If
+    Next i
+        
+    If intgTotal(i) = 0 Then
+        strgLinea = strgMargen & Llena("TOTALES", intgAnch(i)) & " "
+        j = i + 1
+    Else
+        strgLinea = strgMargen
+        j = i
+    End If
+    For i = j To intgCampos
+        If intgImpr(i) = 0 Then
+        Else
+            If intgTotal(i) = 0 Then
+                strgLinea = strgLinea & LlenaChar(" ", intgAnch(i)) & " "
+            ElseIf intgTotal(i) = 2 Then ' Total de columna anterior pasada a hora_minutos
+                If Not IsNumeric(Totales(i - 1)) Then
+                    Dato = CStr(NoNulo(Totales(i - 1)))
+                Else
+                    Dato = Minutos_a_Horas(CLng(Totales(i - 1)))
+                End If
+                strgLinea = strgLinea & LlenaIzq(NoNulo(Dato), intgAnch(i)) & " "
+            Else
+                Select Case intgForm(i)
+                    Case 1
+                        Dato = CStr(NoNulo(Totales(i)))
+                    Case 2 ' total de minutos de columna anterior pasada a Horas-Minutos
+                    Case 3
+                        If Not IsNumeric(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i), "#,##0.00") & " €"
+                        End If
+                    Case 4
+                        If Not IsNumeric(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i), "#,##0")
+                        End If
+                    Case 5
+                        If Not IsDate(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i), "dd/mm/yy")
+                        End If
+                    Case 6
+                        If Not IsNumeric(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i) * 100, "0.00") & "%"
+                        End If
+                    Case 7
+                        If Not IsNumeric(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i) * 100, "0.0") & "%"
+                        End If
+                    Case 8
+                        If Not IsNumeric(Totales(i)) Then
+                            Dato = CStr(NoNulo(Totales(i)))
+                        Else
+                            Dato = Format(Totales(i), "#,##0.00")
+                        End If
+                End Select
+                strgLinea = strgLinea & LlenaIzq(NoNulo(Dato), intgAnch(i)) & " "
+            End If
+        End If
+    Next i
+    strgLinea = Left(strgLinea, Len(strgLinea) - 1)
+    ImprimeLinea
+    If vTotales <> "" Then
+        strgLinea = strgMargen
+        For i = 1 To intgCampos
+            If intgImpr(i) <> 0 Then
+                strgLinea = strgLinea & LlenaChar("_", intgAnch(i)) & " "
+            End If
+        Next i
+        strgLinea = Left(strgLinea, Len(strgLinea) - 1)
+        ImprimeLinea
+        strgLinea = ""
+        ImprimeLinea
+        
+    End If
+    
+    
+    If Not (gintBloc Or gintauxListado) Then Print #1, seRemarcOFF;
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Public Function NoNulo(v As Variant)
+    If IsNull(v) Then
+        NoNulo = ""
+    Else
+        NoNulo = v
+    End If
+End Function
+
+Public Sub ListadoSQL(strFile As String, Optional strTitulo As String = "")
+    ' Lee el fichero de texto strfile y  lo copia a la tabla auxListado
+    On Error GoTo Error_ListadoSQL
+    
+    Open strFile For Input As #1
+    Dim rs As Recordset, strLinea As String, i As Integer, strAuxListado As String
+    strAuxListado = IIf(gint_auxListado1_2 = 2, "auxListado2", "auxListado")
+    CurrentDb.Execute "DELETE * FROM " & strAuxListado, dbFailOnError
+    Set rs = CurrentDb.OpenRecordset(strAuxListado, dbOpenDynaset)
+    Do While Not EOF(1)
+        i = i + 1
+        Line Input #1, strLinea
+        rs.AddNew
+        rs("numLinea") = i
+        rs("txtLinea") = strLinea
+        rs.Update
+    Loop
+    PonValorParam IIf(gint_auxListado1_2 = 2, "rptListado2Cabecera", "rptListadoCabecera"), strTitulo
+
+Salir_ListadoSQL:
+    Close 1
+    Exit Sub
+Error_ListadoSQL:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ListadoSQL"
+            Resume Salir_ListadoSQL
+    End Select
+End Sub
+
+Public Function LeeFichero(strFile As String, Optional iLin As Integer = 0, Optional iMaxLen As Integer = 0) As String
+    ' Lee el fichero de texto strfile y  lo copia a la tabla auxListado
+    On Error GoTo Error_LeeFichero
+    Dim strR As String, strLinea As String
+    Open strFile For Input As #1
+    Do While Not EOF(1)
+        iLin = iLin + 1
+        Line Input #1, strLinea
+        strR = strR & strLinea & vbCrLf
+        If Len(strLinea) > iMaxLen Then iMaxLen = Len(strLinea)
+    Loop
+    LeeFichero = strR
+Salir_LeeFichero:
+    Close 1
+    Exit Function
+Error_LeeFichero:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en LeeFichero"
+            Resume Salir_LeeFichero
+    End Select
+End Function
+
+Public Sub ImprimeFichero(strFile As String, _
+                          Optional iAncho As Integer = 0, _
+                          Optional iCol As Integer = 0, _
+                          Optional intVistaPrevia As Integer = True, _
+                          Optional intPDF As Integer = False, Optional strOutFilePDF As String = "")
+    ' Lee el fichero de texto strfile y  lo copia a la tabla auxListado
+    On Error GoTo Error_ImprimeFichero
+    Dim intImpreXW2 As Integer
+    intImpreXW2 = Nz(DameValorParam("DocsImpresionPor"), 2)
+    If iAncho > 0 And iCol = 0 And intImpreXW2 = 2 Then
+        Dim iMaxLen As Integer, iCols As Integer, strCol As String, i As Integer
+        LeeFichero strFile, , iMaxLen
+        If iMaxLen > iAncho Then
+            iCols = (iMaxLen \ iAncho) + 1
+            strCol = InputBox("Introduzca nº de 'columna' a imprimir. 0 imprime las " & iCols & " columnas necesarias", "¿Todas las columnas?", 0)
+            If Not IsNumeric(strCol) Then Exit Sub
+            iCol = CInt(strCol)
+            If iCol = 0 Then
+                For i = 1 To iCols
+                    ImprimeFichero strFile, iAncho, i
+                Next i
+                Exit Sub
+            End If
+        End If
+    End If
+    Dim strR As String, strLinea As String, strFile2 As String, strPort As String, strTit As String
+    Dim strRPT As String, l As Integer, lMin As Integer
+    
+    Open strFile For Input As #1
+    strFile2 = DirectorioDe(CurrentDb.Name) & "Print" & iCol & ".txt"
+    Open strFile2 For Output As #2
+    If intImpreXW2 = 2 Then 'Imprimir cabecera...
+        For i = 1 To Nz(DameValorParam("DocsMargenSupLineas"), 3)
+            Print #2,
+        Next i
+        If DameValorParam("DocsLogoSN") = True And Not intVistaPrevia Then
+            'ImprimirLogoNV 2, Nz(DameValorParam("DocssImprimirLogoNumero"), 1)
+        Else
+            Print #2, seRemarcON
+            strLinea = Centra(Nz(DameValorParam("rptDocTitulo"), "-"), iAncho \ 2)
+            Print #2, strLinea
+            strLinea = Centra(LlenaChar("-", Len(strLinea)), iAncho \ 2)
+            Print #2, strLinea
+            Print #2, seRemarcOFF
+        End If
+        Print #2, seRemarcON
+        strLinea = Centra(Nz(DameValorParam("rptDocSubtitulo"), "-"), iAncho \ 2)
+        Print #2, strLinea
+        strLinea = Centra(LlenaChar("-", Len(strLinea)), iAncho \ 2)
+        Print #2, strLinea
+        Print #2, seRemarcOFF
+        Print #2,
+    End If
+    lMin = Nz(DameValorParam("DocsLineasMinimo"), 10)
+    Print #2, seExpON
+    Do While Not EOF(1)
+        Line Input #1, strLinea
+        If iCol <> 0 And iAncho <> 0 Then
+            strLinea = Mid(strLinea, (iCol - 1) * iAncho + 1, iAncho)
+        End If
+        l = l + 1
+        Print #2, strLinea
+        'strR = strR & strLinea & vbCrLf
+        'If Len(strLinea) > iMaxLen Then iMaxLen = Len(strLinea)
+    Loop
+    Print #2, seExpOFF
+    While l < lMin
+        Print #2,
+        l = l + 1
+    Wend
+    'If intImpreXW2 = 2 Then CortePapel 2
+    Close
+    strTit = Mid(strFile, Len(DirectorioDe(strFile)) + 1)
+    strTit = Left(strTit, Len(strTit) - 4)
+    If intImpreXW2 = 1 Or intPDF Then
+        gint_auxListado1_2 = 1
+        ListadoSQL strFile2, strTit
+        strRPT = Nz(DameValorParam("DocsRPT"), "rptDocA4")
+        If intPDF Then
+            If strOutFilePDF = "" Then
+                MsgBox "Se debe indicar nombre de fichero PDF de salida"
+                GoTo Salir_ImprimeFichero
+            End If
+            PrintReportAsPDF strRPT, "", strOutFilePDF, strTit
+        Else
+            Dim strPrintWin As String, strPrintDef As String
+            strPrintDef = Application.Printer.DeviceName
+            strPrintWin = Nz(DameValorParam("DocsImpresoraWindows"), strPrintDef)
+            If strPrintDef <> strPrintWin Then Application.Printer = Application.Printers(strPrintWin)
+            DoCmd.OpenReport strRPT, IIf(intVistaPrevia, acViewPreview, acViewNormal)
+            If strPrintDef <> strPrintWin Then Application.Printer = Application.Printers(strPrintDef)
+        End If
+    Else
+        If intVistaPrevia Then
+            Shell "notepad.exe " & strFile2
+        Else
+            strPort = Nz(DLookup("Puerto", "cfgImpresoras", "NombreImpresora = '" & Nz(DameValorParam("DocsImpresoraDOS"), "") & "'"), "")
+            ImprimirDOS strFile2, strPort
+        End If
+    End If
+Salir_ImprimeFichero:
+    Close 1
+    Exit Sub
+Error_ImprimeFichero:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ImprimeFichero"
+            Resume Salir_ImprimeFichero
+    End Select
+End Sub
+
+Public Sub ExportarSQL_Excel(strSQL As String, strFile As String, Optional intAbrirDoc As Integer = True, Optional strOtros As String)
+    On Error GoTo Error_ExportarSQL_Excel
+    Dim rs As Recordset, ws As Worksheet, i As Integer, j As Integer, z As Integer
+    Dim intColsFormat() As Integer
+    Dim intImpr() As Integer, intForm() As Integer, intTotal() As Integer
+    Dim mobjExcel As Excel.Application
+    Dim mxlsExcel As Excel.Workbook
+    DoCmd.Hourglass True
+    Set mobjExcel = CreateObject("Excel.application")
+    mobjExcel.Visible = False
+    If Len(strFile) < 5 Then
+        strFile = strFile & ".xls"
+    End If
+    If Right(strFile, 4) <> ".xls" Then
+        strFile = strFile & ".xls"
+    End If
+    If Dir(strFile) <> "" Then Kill strFile
+    Set mxlsExcel = mobjExcel.Workbooks.Add
+    Set ws = mxlsExcel.Worksheets(1)
+    Set rs = CurrentDb.OpenRecordset(strSQL, dbOpenSnapshot)
+  'Transfer the data to Excel
+   'ws.Range("A1").CopyFromRecordset rs
+    PonOtros rs.Fields.Count, strOtros, intImpr(), intForm(), intTotal
+    For j = 0 To rs.Fields.Count - 1
+        ws.Cells(1, j + 1) = "'" & rs.Fields(j).Name
+        'formato de la columna
+        'ws.Range(Cells(2, j + 1), Cells(2, j + 1)).Select
+        ws.Cells(1, j + 1).Select
+        mobjExcel.Selection.EntireColumn.Select
+        'If intImpr(j + 1) = 0 Then
+ '           mobjExcel.Selection.Hidden = True
+        'Else
+'            mobjExcel.Selection.Hidden = False
+        'End If
+        If strOtros <> "" Then
+            Select Case intForm(j + 1)
+                Case 3
+                    mobjExcel.Selection.NumberFormat = "#,##0.00 €"
+                Case 4
+                    mobjExcel.Selection.NumberFormat = "#,##0;-#,##0;-"
+                Case 5
+                    mobjExcel.Selection.NumberFormat = "dd/mm/yyyy"
+                Case 6, 7
+                    mobjExcel.Selection.NumberFormat = "0.00 %"
+                Case 8
+                    mobjExcel.Selection.NumberFormat = "#,##0.00"
+            End Select
+        End If
+    Next j
+    
+    i = 1
+    If Not rs.EOF Then
+        rs.MoveLast
+        rs.MoveFirst
+    End If
+    z = rs.RecordCount
+    While Not rs.EOF
+        i = i + 1
+        For j = 0 To rs.Fields.Count - 1
+            'ws.Cells(i, j + 1) = Left(rs.Fields(j), 32768)
+            ws.Cells(i, j + 1) = rs.Fields(j)
+        Next j
+        rs.MoveNext
+        SysCmd acSysCmdSetStatus, "Generando Hoja Excel: " & i & "/" & z & " filas"
+    Wend
+    i = i + 1
+    Dim intHayTotal As Integer, k As Integer
+    For j = 0 To rs.Fields.Count - 1
+        ws.Cells(1, j + 1).Select
+        mobjExcel.Selection.HorizontalAlignment = xlCenter
+        mobjExcel.Selection.EntireColumn.AutoFit
+        If strOtros <> "" Then
+            If intTotal(j + 1) = 1 Then
+                If intHayTotal = False Then
+                    ws.Cells(i, 1) = "TOTAL"
+                    intHayTotal = True
+                End If
+                'ws.Cells(i, j + 1) = mobjExcel.WorksheetFunction.Sum(Range(Cells(2, j + 1), Cells(i - 1, j + 1)))
+                ws.Cells(i, j + 1).Formula = "=SUM(" & ws.Cells(2, j + 1).Address(False, False) & ":" & ws.Cells(i - 1, j + 1).Address(False, False) & ")"
+            End If
+        End If
+    Next j
+    
+    For k = 1 To rs.Fields.Count
+        ws.Cells(1, k).Select
+        mobjExcel.Selection.Font.Bold = True
+        mobjExcel.Selection.Interior.ColorIndex = 15
+        'mobjExcel.Selection.Interior.HorizontalAlignment = xlHAlignCenter
+        If strOtros <> "" Then
+            ws.Cells(i, k).Select
+            mobjExcel.Selection.Font.Bold = True
+            mobjExcel.Selection.Interior.ColorIndex = 15
+        End If
+        
+        mobjExcel.Selection.EntireColumn.AutoFit
+    Next k
+    
+    ws.Cells(1, 1).Select
+    mxlsExcel.SaveAs (strFile)
+    mobjExcel.Quit
+    If intAbrirDoc Then AbrirArchivoDesdeSO strFile
+Salir_ExportarSQL_Excel:
+    DoCmd.Hourglass False
+    SysCmd acSysCmdClearStatus
+    Set mobjExcel = Nothing
+    Set mxlsExcel = Nothing
+    Set ws = Nothing
+    Exit Sub
+Error_ExportarSQL_Excel:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en ExportarSQL_Excel" & vbCrLf & Err.Description
+            Resume Salir_ExportarSQL_Excel
+    End Select
+
+End Sub
+
+
+
+Public Function PonOtros(intNumCampos As Integer, strOtros As String, intImpr() As Integer, intForm() As Integer, intTotal() As Integer)
+    On Error GoTo Error_PonOtros
+    If strOtros = "" Then GoTo Salir_PonOtros
+    Dim i As Integer, k As Integer, intC1 As Integer, intC2 As Integer, intC3 As Integer, intC4 As Integer
+    
+    ReDim intImpr(1 To intNumCampos) As Integer
+    'ReDim intAnch(1 To intgCampos) As Integer
+    'ReDim intAlin(1 To intgCampos) As Integer
+    ReDim intForm(1 To intNumCampos) As Integer
+    ReDim intTotal(1 To intNumCampos) As Integer
+    intC1 = InStr(1, strOtros, ",")
+    intC2 = InStr(intC1 + 1, strOtros, ",")
+    intC3 = InStr(intC2 + 1, strOtros, ",")
+    intC4 = InStr(intC3 + 1, strOtros, ",")
+    For i = 1 To intNumCampos
+        If k = 0 Then
+            If Mid(strOtros, i, 1) = "," Then k = i - 1
+        End If
+        If k > 0 Then
+            intImpr(i) = CInt(Mid(strOtros, k, 1))
+            'intAnch(i) = CInt(Mid(strOtros, intC1 + 1 + (k - 1) * 2, 2))
+            'intAlin(i) = CInt(Mid(strOtros, intC2 + k, 1))
+            intForm(i) = CInt(Mid(strOtros, intC3 + k, 1))
+            intTotal(i) = CInt(Mid(strOtros, intC4 + k, 1))
+        Else
+            intImpr(i) = CInt(Mid(strOtros, i, 1))
+            'intAnch(i) = CInt(Mid(strOtros, intC1 + 1 + (i - 1) * 2, 2))
+            'intAlin(i) = CInt(Mid(strOtros, intC2 + i, 1))
+            intForm(i) = CInt(Mid(strOtros, intC3 + i, 1))
+            intTotal(i) = CInt(Mid(strOtros, intC4 + i, 1))
+        End If
+    Next i
+Salir_PonOtros:
+    Exit Function
+Error_PonOtros:
+    Select Case Err
+        Case Else
+            MsgBox "error nº " & Err & " en PonOtros" & vbCrLf & Err.Description
+            Resume Salir_PonOtros
+    End Select
+End Function
+
+Public Function NombreCampoValido(ByVal str As String, _
+                               Optional intIncluidoEspacio As Integer = False, _
+                               Optional intIncluidoDosPuntos As Integer = False, _
+                               Optional intPuntoNo As Integer = False) As String
+    Dim i As Integer, strResult As String
+    strResult = str
+    strResult = Replace(strResult, "-", "_")
+    strResult = Replace(strResult, "/", "_")
+    strResult = Replace(strResult, "?", "_")
+    If Not intPuntoNo Then strResult = Replace(strResult, ".", "_")
+    strResult = Replace(strResult, "(", "_")
+    strResult = Replace(strResult, ")", "_")
+    strResult = Replace(strResult, vbCrLf, "_")
+    If intIncluidoEspacio = True Then strResult = Replace(strResult, " ", "_")
+    If intIncluidoDosPuntos = True Then strResult = Replace(strResult, ":", "_")
+    'For i = 1 To Len(str)
+    '    Select Case Mid(str, i, 1)
+    '        Case "-", "/", "?", "."
+    '            Mid(strResult, i, 1) = "_"
+    '        Case " "
+    '            If intIncluidoEspacio = True Then
+    '                Mid(strResult, i, 1) = "_"
+    '            End If
+    '    End Select
+    'Next i
+    NombreCampoValido = strResult
+
+End Function
+
+Public Function DiasDelMes(intMes As Integer, Optional intAño As Integer = 0) As Integer
+'Devuelve el nº de días del mes, si se pasa año, se comprueba si es bisiesto en caso de febrero
+' si no se pasa año, se toma el actual
+    If intAño = 0 Then intAño = Year(Date)
+    Select Case intMes
+        Case 1, 3, 5, 7, 8, 10, 12
+            DiasDelMes = 31
+        Case 4, 6, 9, 11
+            DiasDelMes = 30
+        Case 2
+            If EsBisiesto(intAño) Then
+                DiasDelMes = 29
+            Else
+                DiasDelMes = 28
+            End If
+        Case Else
+            MsgBox "Se pasó un nº de mes erróneo"
+            DiasDelMes = 0
+    End Select
+        
+End Function
+
+Public Function CambiaAcentos(varCadena As Variant) As String
+    Dim i As Integer
+    Dim strResult As String
+    Dim intCod As Integer
+    Dim db As Database
+    Dim rs As Recordset
+    On Error GoTo Error_CambiaAcentos
+    If IsNull(varCadena) Then
+        CambiaAcentos = ""
+        Exit Function
+    End If
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("sysCodAcentos")
+'    rs.Index = "CodWin"
+    For i = 1 To Len(varCadena)
+        intCod = Asc(Mid(varCadena, i, 1))
+        If intCod >= 128 Then
+            'rs.Seek "=", intCod
+            rs.FindFirst "CodWin =" & intCod
+            If Not rs.NoMatch Then
+                strResult = strResult & Chr(rs("CodSato"))
+            Else
+                strResult = strResult & Chr(intCod)
+            End If
+        Else
+            strResult = strResult & Chr(intCod)
+        End If
+    Next i
+    CambiaAcentos = strResult
+Salir_CambiaAcentos:
+    Exit Function
+Error_CambiaAcentos:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description & vbCrLf & "En CambiaAcentos"
+    End Select
+    CambiaAcentos = CStr(varCadena)
+    Resume Salir_CambiaAcentos
+End Function
+
+Public Function Minutos_a_Horas(lngMinutos As Long, Optional intQuita0h As Integer = False) As String
+    If intQuita0h And lngMinutos < 60 Then
+        Minutos_a_Horas = Format(lngMinutos Mod 60, "0") & "'"
+    Else
+        Minutos_a_Horas = Format(lngMinutos \ 60, "#,##0") & "h " & Format(lngMinutos Mod 60, "00") & "'"
+    End If
+End Function
+
+Public Function DimeHHNN(strHH_NN As String) As Variant
+    On Error GoTo HandleError
+    Dim strXML As String, strR As String, dt As Date
+    On Error Resume Next
+    dt = CDate(strHH_NN)
+    If Err <> 0 Then
+        strHH_NN = "  :  "
+    Else
+        strHH_NN = Format(dt, "HH:NN")
+    End If
+    PonXML strXML, "HH", Left(strHH_NN, 2)
+    PonXML strXML, "NN", Mid(strHH_NN, 4, 2)
+    DoCmd.OpenForm "frmHH_NN", , , , , acDialog, strXML
+    If Not IsOpenForm("frmHH_NN") Then
+        DimeHHNN = Null
+        Exit Function
+    End If
+    strR = spnz(Forms("frmHH_NN")("txtHH"), "00") & ":" & spnz(Forms("frmHH_NN")("txtNN"), "00")
+    DoCmd.Close acForm, "frmHH_NN"
+    DimeHHNN = strR
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function EsBisiesto(intAño As Integer) As Integer
+    On Error GoTo Error_EsBisiesto
+    EsBisiesto = False
+    If (intAño Mod 4 = 0 And intAño Mod 100 <> 0) Or intAño Mod 400 = 0 Then
+        EsBisiesto = True
+    End If
+Salir_EsBisiesto:
+    Exit Function
+Error_EsBisiesto:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & " en EsBisiesto" & vbCrLf & Err.Description
+            Resume Salir_EsBisiesto
+    End Select
+End Function

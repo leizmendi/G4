@@ -91,7 +91,7 @@ Public Function DameCoordenadas(sDireccion As String _
         Next i
         sRS = Mid(sRS, 2)
         CurrentDb.Execute "UPDATE sysBusquedas SET strSQL=" & ConComillas(sRS, True) & " WHERE CodBusqueda = 'SelOP'", dbFailOnError
-        sCoords = Nz(BuscaAyuda("SelOP", , 1, , , False), "")
+        sCoords = Nz(buscaayuda("SelOP", , 1, , , False), "")
         vCoords = Split(sCoords, "|")
         dLat = vCoords(0)
         dLng = vCoords(1)

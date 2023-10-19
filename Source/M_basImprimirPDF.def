@@ -34,11 +34,11 @@ Public Sub PrintReportAsPDF(strRPT As String, strWHERE As String, strOutFilePDF 
     current_printer_index = -1
     current_printer_name = Application.Printer.DeviceName
     For i = 0 To Application.Printers.Count - 1
-        If Application.Printers.Item(i).DeviceName = pdf_printer_name Then
+        If Application.Printers.item(i).DeviceName = pdf_printer_name Then
             pdf_printer_index = i
         End If
         'If Application.Printers.Item(i).DeviceName = "Samsung ML-2010 Series" Then 'current_printer_name Then
-        If Application.Printers.Item(i).DeviceName = current_printer_name Then
+        If Application.Printers.item(i).DeviceName = current_printer_name Then
             current_printer_index = i
         End If
     Next
@@ -91,14 +91,14 @@ Public Sub PrintReportAsPDF(strRPT As String, strWHERE As String, strOutFilePDF 
         
         Rem -- Place a stamp in the lower right corner
         If intMarcaAgua = True Then
-            .SetValue "WatermarkText", Nz(DimeXML(strXMLmarcaAgua, "WaterMarkText"), "ACCESS DEMO")
-            .SetValue "WatermarkVerticalPosition", Nz(DimeXML(strXMLmarcaAgua, "WatermarkVerticalPosition"), "middle")
-            .SetValue "WatermarkHorizontalPosition", Nz(DimeXML(strXMLmarcaAgua, "WatermarkHorizontalPosition"), "center")
-            .SetValue "WatermarkVerticalAdjustment", Nz(DimeXML(strXMLmarcaAgua, "WatermarkVerticalAdjustment"), "3")
-            .SetValue "WatermarkHorizontalAdjustment", Nz(DimeXML(strXMLmarcaAgua, "WatermarkHorizontalAdjustment"), "1")
-            .SetValue "WatermarkRotation", Nz(DimeXML(strXMLmarcaAgua, "WatermarkRotation"), "45")
-            .SetValue "WatermarkColor", Nz(DimeXML(strXMLmarcaAgua, "WatermarkColor"), "#ff00FF")
-            .SetValue "WatermarkOutlineWidth", Nz(DimeXML(strXMLmarcaAgua, "WatermarkOutlineWidth"), "1")
+            .SetValue "WatermarkText", Nz(dimexml(strXMLmarcaAgua, "WaterMarkText"), "ACCESS DEMO")
+            .SetValue "WatermarkVerticalPosition", Nz(dimexml(strXMLmarcaAgua, "WatermarkVerticalPosition"), "middle")
+            .SetValue "WatermarkHorizontalPosition", Nz(dimexml(strXMLmarcaAgua, "WatermarkHorizontalPosition"), "center")
+            .SetValue "WatermarkVerticalAdjustment", Nz(dimexml(strXMLmarcaAgua, "WatermarkVerticalAdjustment"), "3")
+            .SetValue "WatermarkHorizontalAdjustment", Nz(dimexml(strXMLmarcaAgua, "WatermarkHorizontalAdjustment"), "1")
+            .SetValue "WatermarkRotation", Nz(dimexml(strXMLmarcaAgua, "WatermarkRotation"), "45")
+            .SetValue "WatermarkColor", Nz(dimexml(strXMLmarcaAgua, "WatermarkColor"), "#ff00FF")
+            .SetValue "WatermarkOutlineWidth", Nz(dimexml(strXMLmarcaAgua, "WatermarkOutlineWidth"), "1")
         End If
         
         Rem -- Write the settings to the runonce.ini file
@@ -174,10 +174,10 @@ Sub PrintReport(strRPT As String, Optional strPrinter_name As String = "", Optio
     strCurrent_printer_name = Application.Printer.DeviceName
     If strPrinter_name = "" Then strPrinter_name = strCurrent_printer_name
     For i = 0 To Application.Printers.Count - 1
-        If Application.Printers.Item(i).DeviceName = strPrinter_name Then
+        If Application.Printers.item(i).DeviceName = strPrinter_name Then
             intPrinter_index = i
         End If
-        If Application.Printers.Item(i).DeviceName = strCurrent_printer_name Then
+        If Application.Printers.item(i).DeviceName = strCurrent_printer_name Then
             intCurrent_printer_index = i
         End If
     Next

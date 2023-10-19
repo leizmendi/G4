@@ -1,0 +1,94 @@
+Option Compare Database
+Option Explicit
+Global seNORMAL As String
+Global seCOMPRI As String
+Global seELITE As String
+Global seExpON  As String
+Global seExpOFF  As String
+Global seReturn  As String
+Global seSaltPg  As String
+Global seInicia  As String
+Global seLongEnLin As String
+Global seSubrayON As String
+Global seSubrayOFF As String
+Global seRemarcON As String
+Global seRemarcOFF As String
+
+
+
+Public Function CargarCodigosEscape(strPrint As String, Optional intBloc As Integer = False)
+    On Error GoTo Error_CargarCodigosEscape
+    If intBloc = False Then
+        seNORMAL = TraduceSE(DLookup("EscrituraNormal", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seCOMPRI = TraduceSE(DLookup("Comprimido", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seELITE = TraduceSE(DLookup("Elite", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seExpON = TraduceSE(DLookup("ExpandidoON", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seExpOFF = TraduceSE(DLookup("ExpandidoOFF", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seReturn = TraduceSE(DLookup("Return", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seSaltPg = TraduceSE(DLookup("SaltoPagina", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seInicia = TraduceSE(DLookup("Inicializacion", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seLongEnLin = TraduceSE(DLookup("LongitudPaginaEnLineas", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seSubrayON = TraduceSE(DLookup("SubrayadoON", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seSubrayOFF = TraduceSE(DLookup("SubrayadoOFF", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seRemarcON = TraduceSE(DLookup("RemarcadoON", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seRemarcOFF = TraduceSE(DLookup("RemarcadoOFF", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+    Else
+        seNORMAL = ""
+        seCOMPRI = ""
+        seELITE = ""
+        seExpON = ""
+        seExpOFF = ""
+        seReturn = vbCrLf 'TraduceSE(DLookup("Return", "cfgImpresoras", "NombreImpresora = '" & strPrint & "'"))
+        seSaltPg = ""
+        seInicia = ""
+        seLongEnLin = ""
+        seSubrayON = ""
+        seSubrayOFF = ""
+        seRemarcON = ""
+        seRemarcOFF = ""
+    End If
+Salir_CargarCodigosEscape:
+    Exit Function
+Error_CargarCodigosEscape:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description & vbCrLf & "En CargarCodigosEscape"
+            CargarCodigosEscape = ""
+    End Select
+    Resume Salir_CargarCodigosEscape
+End Function
+
+Public Function TraduceSE(var As Variant) As String
+    Dim i As Integer
+    Dim j As Integer
+    Dim strRes As String
+    On Error GoTo Error_TraduceSE
+    
+    'If Len(var) Mod 3 <> 0 Then
+    '    MsgBox "Existe una secuencia de escape errónea en el fichero de Impresoras"
+    '    Exit Function
+    '    'TraduceSE = "Error"
+    'End If
+    If IsNull(var) Then
+        TraduceSE = ""
+        Exit Function
+    End If
+    j = Len(var) / 3
+    For i = 1 To j
+        If Mid(var, (i * 3) - 2, 1) = "n" Then
+            strRes = strRes & Mid(var, (i * 3) - 2 + 1)
+            Exit For
+        End If
+        strRes = strRes & Chr$(CLng(Mid(var, (i * 3) - 2, 3)))
+    Next i
+    TraduceSE = strRes
+Salir_TraduceSE:
+    Exit Function
+Error_TraduceSE:
+    Select Case Err
+        Case Else
+            MsgBox "Error nº " & Err & vbCrLf & Err.Description & vbCrLf & "En TraduceSE"
+            TraduceSE = ""
+    End Select
+    Resume Salir_TraduceSE
+End Function

@@ -1,13 +1,18 @@
 Option Compare Database
 Option Explicit
 
-Public Function AddReciboFromFacturaToRemesa(lIdFacturaCab As Long, lIdReciboEmision As Long, Optional sConcepto As String = "") As Boolean
+Public Function AddReciboFromFacturaToRemesa(lIdFacturaCab As Long _
+                                           , lIdReciboEmision As Long _
+                                  , Optional sConcepto As String = "" _
+                                  , Optional bEsMetalico As Boolean = False) As Boolean
     On Error GoTo HandleError
     Dim sSQL As String, lNumRecibo As Long, iR As Integer, sNumFac As String, rsCli As Recordset, rsR As Recordset, lIdCli As Long, sCuentaBancaria As String, sCli As String
     Dim cImporte As Currency, dtFM As Date, sRM As String
     If Nz(DLookup("IdentificacionFichero", "tbRecibosEmisiones", "IdReciboEmision = " & lIdReciboEmision), 0) <> 0 Then
-        MsgBox "La Remesa Nº " & lIdReciboEmision & " ya está generada, se debe poder modificar para incluir nuevos recibos", vbExclamation
-        GoTo HandleExit
+        iR = MsgBox("La Remesa Nº " & lIdReciboEmision & " ya está generada, se debe poder modificar para incluir nuevos recibos" & vbCrLf & "¿Quiere desbloquearla?", vbOKCancel + vbQuestion)
+        If iR = vbCancel Then GoTo HandleExit
+        sSQL = "UPDATE tbRecibosEmisiones SET IdentificacionFichero = 0 WHERE IdReciboEmision = " & lIdReciboEmision
+        CurrentDb.Execute sSQL, dbFailOnError
     End If
     sNumFac = Nz(DLookup("NumFactura", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), "")
     If sNumFac = "" Then
@@ -30,22 +35,28 @@ Public Function AddReciboFromFacturaToRemesa(lIdFacturaCab As Long, lIdReciboEmi
         GoTo HandleExit
     End If
     sCli = DimeCliente(lIdCli)
-    sCuentaBancaria = rsCli("CuentaBancaria")
-    If Len(sCuentaBancaria) <> 24 Then
-        MsgBox "La cuenta bancaria del cliente " & sCli & " no está completa: (" & sCuentaBancaria & ")", vbExclamation
-        GoTo HandleExit
-    End If
-    dtFM = Nz(rsCli("FechaMandato"), 0)
-    If dtFM = 0 Then
-        dtFM = Date
-        sSQL = "UPDATE tbClientes SET FechaMandato = " & CLng(dtFM) & " WHERE IdCliente = " & lIdCli
-        CurrentDb.Execute sSQL, dbFailOnError
-    End If
-    sRM = Nz(rsCli("ReferenciaMandato"), "")
-    If sRM = "" Then
-        sRM = CStr(lIdCli)
-        sSQL = "UPDATE tbClientes SET ReferenciaMandato = " & ConComillas(sRM) & " WHERE IdCliente = " & lIdCli
-        CurrentDb.Execute sSQL, dbFailOnError
+    If Not bEsMetalico Then
+        sCuentaBancaria = Nz(rsCli("CuentaBancaria"), "")
+        If sCuentaBancaria = "" Then
+            MsgBox sCli & " no tiene registrado el Nº de cuenta bancaria, no se generará recibo", vbExclamation
+            GoTo HandleExit
+        End If
+        If Len(sCuentaBancaria) <> 24 Then
+            MsgBox "La cuenta bancaria del cliente " & sCli & " no está completa: (" & sCuentaBancaria & ")", vbExclamation
+            GoTo HandleExit
+        End If
+        dtFM = Nz(rsCli("FechaMandato"), 0)
+        If dtFM = 0 Then
+            dtFM = Date
+            sSQL = "UPDATE tbClientes SET FechaMandato = " & CLng(dtFM) & " WHERE IdCliente = " & lIdCli
+            CurrentDb.Execute sSQL, dbFailOnError
+        End If
+        sRM = Nz(rsCli("ReferenciaMandato"), "")
+        If sRM = "" Then
+            sRM = CStr(lIdCli)
+            sSQL = "UPDATE tbClientes SET ReferenciaMandato = " & ConComillas(sRM) & " WHERE IdCliente = " & lIdCli
+            CurrentDb.Execute sSQL, dbFailOnError
+        End If
     End If
     lNumRecibo = Nz(DLookup("NumRecibo", "tbFacturasCab", "IdFacturaCab = " & lIdFacturaCab), 0)
     If lNumRecibo <> 0 Then
@@ -56,30 +67,60 @@ Public Function AddReciboFromFacturaToRemesa(lIdFacturaCab As Long, lIdReciboEmi
     Set rsR = CurrentDb.OpenRecordset("tbRecibos", dbOpenDynaset, dbAppendOnly)
     rsR.AddNew
     rsR("IdCliente") = lIdCli
-    rsR("ENTIDAD") = Mid(sCuentaBancaria, 5, 4)
-    rsR("OFICINA") = Mid(sCuentaBancaria, 9, 4)
+    If Not bEsMetalico Then
+        rsR("ENTIDAD") = Mid(sCuentaBancaria, 5, 4)
+        rsR("OFICINA") = Mid(sCuentaBancaria, 9, 4)
+        rsR("DIGCONT") = Mid(sCuentaBancaria, 13, 2)
+        rsR("NUMCUENTA") = Mid(sCuentaBancaria, 15)
+        rsR("CuentaIBAN") = sCuentaBancaria
+    End If
     rsR("CODREF") = rsCli("NIF")
     rsR("NIF_O") = GetParam("OrdenanteNIF")
     rsR("SUFIJO_O") = GetParam("OrdenanteSUFIJO")
     sCli = Replace(sCli, vbCr, " ")
     sCli = Replace(sCli, vbLf, " ")
     rsR("Nombre") = Left(sCli, 40)
-    rsR("DIGCONT") = Mid(sCuentaBancaria, 13, 2)
-    rsR("NUMCUENTA") = Mid(sCuentaBancaria, 15)
-    rsR("CuentaIBAN") = sCuentaBancaria
     rsR("IMPORTE") = cImporte
     rsR("CONCEPTO") = IIf(sConcepto = "", "Fact. " & sNumFac, sConcepto)
     rsR("NUMRECIBO") = lNumRecibo
     rsR("IdReciboEmision") = lIdReciboEmision
     'rsR("CIF_Cliente") = rsCli("NIF")
     rsR("FechaMandato") = dtFM
-    rsR("ReferenciaMandato") = sRM
+    rsR("ReferenciaMandato") = spnz(sRM, Null)
     
     rsR.Update
     sSQL = "UPDATE tbFacturasCab SET NumRecibo = " & lNumRecibo & " WHERE IdFacturaCab = " & lIdFacturaCab
     CurrentDb.Execute sSQL, dbFailOnError
     PonTotalesRemesa lIdReciboEmision
     AddReciboFromFacturaToRemesa = True
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function AddReciboFromFacturaToMetalico(lIdFacturaCab As Long) As Boolean
+    On Error GoTo HandleError
+    Dim sSQL As String, lNumRecibo As Long, iR As Integer, sNumFac As String, rsCli As Recordset, rsR As Recordset, lIdCli As Long, sCuentaBancaria As String, sCli As String
+    Dim cImporte As Currency, dtFM As Date, sRM As String, lIdReciboEmision As Long, sConcepto As String
+    Dim dtF As Date
+    dtF = Nz(adhdocalendar(, 1, "Fecha del Pago"), 0)
+    If dtF = 0 Then GoTo HandleExit
+    lIdReciboEmision = Nz(DLookup("IdReciboEmision", "tbRecibosEmisiones", "TipoEmision = 1 AND FechaCargo = " & CLng(dtF)), 0)
+    If lIdReciboEmision = 0 Then
+        sSQL = "INSERT INTO tbRecibosEmisiones(FechaEmision, FechaCargo, TipoEmision, Concepto)" _
+            & " VALUES(" & CLng(Date) & ", " _
+            & CLng(dtF) & ", 1" _
+            & ", 'Pago Metálico')"
+        CurrentDb.Execute sSQL, dbFailOnError
+        lIdReciboEmision = Nz(DLookup("IdReciboEmision", "tbRecibosEmisiones", "TipoEmision = 1 AND FechaCargo = " & CLng(dtF)), 0)
+        If lIdReciboEmision = 0 Then
+            MsgBox "No se pudo generar Emisión de Pago", vbExclamation
+            GoTo HandleExit
+        End If
+    End If
+    AddReciboFromFacturaToMetalico = AddReciboFromFacturaToRemesa(lIdFacturaCab, lIdReciboEmision, , True)
 HandleExit:
     Exit Function
 HandleError:

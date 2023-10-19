@@ -254,6 +254,7 @@ Public Function Autoexec()
     On Error GoTo Error_Autoexec
     Call ComprobarVinculos
     Call ComprobarCampos
+    Call ComprobarUpdates
     DoCmd.OpenForm "frmMenu"
     DoCmd.Maximize
 Salir_Autoexec:

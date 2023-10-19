@@ -249,18 +249,18 @@ End Function
 '**/
 Public Function qrcodeCreateImageInUtf8(szOutputFile As String, szInput As String, Optional imgType As ImageType = ImageType.GIF, _
     Optional nPixelsPerModule As Long = 0, Optional nMargin As Long = 0, Optional EccLevel As Ecc = Ecc.M, Optional nOptions As Long = 0) As Long
-    Dim b() As Byte
+    Dim B() As Byte
     Dim nLen As Long
     Dim opts As Long
     opts = nOptions Or EccLevel Or imgType
     ' Convert input Unicode (UTF-16) string to UTF-8-encoded sequence of bytes
-    b = Utf8BytesFromString(szInput)
+    B = Utf8BytesFromString(szInput)
     ' Add an extra NUL byte to the array
-    nLen = UBound(b) + 2    ' b is currently Ubound(b) - 1 bytes long
-    ReDim Preserve b(nLen)
-    b(nLen - 1) = 0
+    nLen = UBound(B) + 2    ' b is currently Ubound(b) - 1 bytes long
+    ReDim Preserve B(nLen)
+    B(nLen - 1) = 0
     ' Pass nul-terminated UTF-8 bytes to aliased form of core function
-    qrcodeCreateImageInUtf8 = QRCODE_CreateImageFromBytes(szOutputFile, b(0), nPixelsPerModule, nMargin, opts)
+    qrcodeCreateImageInUtf8 = QRCODE_CreateImageFromBytes(szOutputFile, B(0), nPixelsPerModule, nMargin, opts)
 End Function
 
 '/**
@@ -276,18 +276,18 @@ End Function
 ' @deprecated Use {@link qrcodeCreateImageInUtf8}.
 '**/
 Public Function qrcodeCreateGifInUtf8(szOutputFile As String, szInput As String, Optional nPixelsPerModule As Long = 0, Optional EccLevel As Ecc = Ecc.M, Optional szParams As String = "", Optional nOptions As Long = 0) As Long
-    Dim b() As Byte
+    Dim B() As Byte
     Dim nLen As Long
     Dim opts As Long
     opts = nOptions Or EccLevel
     ' Convert input Unicode (UTF-16) string to UTF-8-encoded sequence of bytes
-    b = Utf8BytesFromString(szInput)
+    B = Utf8BytesFromString(szInput)
     ' Add an extra NUL byte to the array
-    nLen = UBound(b) + 2    ' b is currently Ubound(b) - 1 bytes long
-    ReDim Preserve b(nLen)
-    b(nLen - 1) = 0
+    nLen = UBound(B) + 2    ' b is currently Ubound(b) - 1 bytes long
+    ReDim Preserve B(nLen)
+    B(nLen - 1) = 0
     ' Pass nul-terminated UTF-8 bytes to aliased form of core function
-    qrcodeCreateGifInUtf8 = QRCODE_CreateGifFromBytes(szOutputFile, b(0), nPixelsPerModule, szParams, opts)
+    qrcodeCreateGifInUtf8 = QRCODE_CreateGifFromBytes(szOutputFile, B(0), nPixelsPerModule, szParams, opts)
 End Function
 
 
@@ -306,18 +306,18 @@ End Function
 ' @remark Any non-ASCII characters in `szInput` will be encoded in UTF-8 before processing.
 '**/
 Public Function qrcodeCreatePdfInUtf8(szOutputFile As String, szInput As String, Optional nPixelsPerModule As Long = 0, Optional EccLevel As Ecc = Ecc.M, Optional nPageWidth As Long = 0, Optional nPageHeight As Long = 0, Optional nX As Long = 0, Optional nY As Long = 0, Optional nOptions As Long = 0) As Long
-    Dim b() As Byte
+    Dim B() As Byte
     Dim nLen As Long
     Dim opts As Long
     opts = nOptions Or EccLevel
     ' Convert input Unicode (UTF-16) string to UTF-8-encoded sequence of bytes
-    b = Utf8BytesFromString(szInput)
+    B = Utf8BytesFromString(szInput)
     ' Add an extra NUL byte to the array
-    nLen = UBound(b) + 2    ' b is currently Ubound(b) - 1 bytes long
-    ReDim Preserve b(nLen)
-    b(nLen - 1) = 0
+    nLen = UBound(B) + 2    ' b is currently Ubound(b) - 1 bytes long
+    ReDim Preserve B(nLen)
+    B(nLen - 1) = 0
     ' Pass nul-terminated UTF-8 bytes to aliased form of core function
-    qrcodeCreatePdfInUtf8 = QRCODE_CreatePdfFromBytes(szOutputFile, b(0), nPixelsPerModule, nPageWidth, nPageHeight, nX, nY, opts)
+    qrcodeCreatePdfInUtf8 = QRCODE_CreatePdfFromBytes(szOutputFile, B(0), nPixelsPerModule, nPageWidth, nPageHeight, nX, nY, opts)
 End Function
 
 '/**

@@ -38,7 +38,7 @@ Public Function GenerarRemesaSEPA1914(lngIdEmision As Long _
     
     
     
-    Dim x As Integer
+    Dim X As Integer
     Dim cod_error As Integer
     Dim v As Variant
     Dim intNL As Integer
@@ -105,7 +105,7 @@ End Function
 
 
 Sub Error_en_disco(codigo As Integer)
-    Dim x As Integer
+    Dim X As Integer
     DoCmd.Hourglass False
     Select Case codigo
         Case 61
@@ -115,7 +115,7 @@ Sub Error_en_disco(codigo As Integer)
         Case 71
             DoCmd.SetWarnings False
             'rsRemesa.Close
-            x = MsgBox("El disco no está listo", , "Recibos")
+            X = MsgBox("El disco no está listo", , "Recibos")
             DoCmd.SetWarnings True
         Case Else
             MsgBox "Error nº " & Err & vbCrLf & Err.Description

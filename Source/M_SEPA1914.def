@@ -97,7 +97,7 @@ Public RegistroTotalGeneral As DefinicionTotalGeneral
 
 Public Seguir As Boolean
 Public IdRemesa As Long
-Public rs As dao.Recordset
+Public rs As DAO.Recordset
 Global ControlImporteRemesa As Single
 Global ControlRecibosRemesa As Single
 
@@ -283,6 +283,7 @@ Errores_Rutina:
     Select Case Err
         Case Else
             MsgBox Err.Description, vbCritical, Err.Number
+            Resume Salir_Rutina
             Stop: Resume
     End Select
 End Sub
@@ -486,7 +487,7 @@ End Function
 Function FormatarNumero(valor As Single, Posiciones As Integer, Optional decimales As Boolean) As String
     ' Esta función formata el número recibido. Pone el tamaño recibido. Deja los decimales a la derecha
     Dim ValorStr As String, posicion As Integer
-    ValorStr = Trim(Str(valor))
+    ValorStr = Trim(str(valor))
     posicion = InStr(1, ValorStr, ".")
     If posicion > 0 Then
         ' El número tiene decimales. Los hemos de quitar
@@ -667,7 +668,7 @@ Private Function Transformar_ISO20022(valor As String) As String
 End Function
 
 Public Sub RepasoFicheroAsociados()
-    Dim rs As dao.Recordset, i As Integer
+    Dim rs As DAO.Recordset, i As Integer
     Set rs = CurrentDb.OpenRecordset("Asociados")
     While Not rs.EOF
         rs.Edit

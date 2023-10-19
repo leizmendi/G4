@@ -66,7 +66,7 @@ End Type
 Declare Function adh_accOfficeGetFileName Lib "msaccess.exe" _
  Alias "#56" (gfni As adh_accOfficeGetFileNameInfo, ByVal fOpen As Integer) As Long
 Declare Function adh_accChooseColor Lib "msaccess.exe" _
- Alias "#53" (ByVal Hwnd As Long, RGB As Long) As Long
+ Alias "#53" (ByVal hwnd As Long, RGB As Long) As Long
 
 ' Registry
 ' Predefined root keys for the registry.
@@ -194,7 +194,7 @@ Public Const adhcAccRSTypeTable = 1
 Public Const adhcAccRSTypeQuery = 2
 
 Declare Function adh_apiSendMessage Lib "user32" Alias "SendMessageA" _
- (ByVal Hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, lParam As Any) As Long
+ (ByVal hwnd As Long, ByVal wMsg As Long, ByVal wParam As Long, lParam As Any) As Long
 
 ' Create an Information Context
 Declare Function adh_apiCreateIC Lib "gdi32" Alias "CreateICA" _
@@ -393,7 +393,7 @@ Sub adhSplitPath(pstrPath As String, pstrDrive As String, _
     pstrExt = adhTrimNull(strExt)
 End Sub
 
-Function adhFullPath(strFilename As String) As String
+Function adhFullPath(strFileName As String) As String
 
     ' A wrapper function for the adh_accFullPath() function.
     '
@@ -421,7 +421,7 @@ Function adhFullPath(strFilename As String) As String
     Dim strBuffer As String * adhcSP_MAXPATH
     Dim intRetval As Integer
 
-    intRetval = adh_accFullPath(strFilename, strBuffer, adhcSP_MAXPATH)
+    intRetval = adh_accFullPath(strFileName, strBuffer, adhcSP_MAXPATH)
     adhFullPath = Left(strBuffer, intRetval)
 End Function
 
@@ -490,6 +490,6 @@ Function adhCBFProcExists(frm As Form, strProcName As String) As Integer
 
 Const adhcWM_PROCEXISTS = 1434
 
-  adhCBFProcExists = adh_apiSendMessage((frm.Hwnd), adhcWM_PROCEXISTS, _
+  adhCBFProcExists = adh_apiSendMessage((frm.hwnd), adhcWM_PROCEXISTS, _
    0, ByVal strProcName) <> 0
 End Function

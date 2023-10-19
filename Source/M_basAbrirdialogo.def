@@ -27,7 +27,7 @@ Public Function AbrirDialogo(Optional intOpen As Integer = True _
     
     
     On Error GoTo HandleErrors
-    gfni.hwndOwner = Screen.ActiveForm.Hwnd
+    gfni.hwndOwner = Screen.ActiveForm.hwnd
     AbrirDialogo = ""
     If intConfirmReplace Then
         lngFlags = lngFlags Or adhcGfniConfirmReplace

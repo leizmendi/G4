@@ -213,7 +213,7 @@ Error_GetParam:
     End Select
 End Function
 
-Public Function SetParam(strNP As String, vVP As Variant, Optional intTipoDato As Integer = 10, Optional intUser As Integer = True) As Integer
+Public Function SetParam(strNP As String, vVP As Variant, Optional intTipoDato As Integer = 10, Optional intUser As Integer = False) As Integer
     On Error GoTo Error_GetParam
     Dim strParam As String
     strParam = strNP & IIf(intUser, "_" & GetUserName(), "")

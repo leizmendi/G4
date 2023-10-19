@@ -111,7 +111,7 @@ Public Sub PonGruposCliente(lngIdCliente As Long)
         strR = strR & rs(0) & ", "
         rs.MoveNext
     Wend
-    If Len(strR) > 2 Then strR = recdertop(strR, 2, 150)
+    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 150)
     strSQL = "UPDATE tbClientes SET Grupos = " & ConComillas(strR) & " WHERE IdCliente = " & lngIdCliente
     CurrentDb.Execute strSQL, dbFailOnError
 HandleExit:
@@ -535,7 +535,7 @@ Public Function DesgloseIVAAlbaran(lIdAECab As Long _
          & " ORDER BY IVA"
     Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
     While Not rs.EOF
-        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & llenaizq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & llenaizq(Format(rs("TIVA"), "currency"), 10)
+        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & LlenaIzq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & LlenaIzq(Format(rs("TIVA"), "currency"), 10)
         rs.MoveNext
     Wend
     If Len(sR) > 2 Then sR = Mid(sR, 3)

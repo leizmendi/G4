@@ -262,7 +262,7 @@ Public Function DimeEmailCli(lIdCliente As Long, Optional intSiNoHayPedir As Int
     Dim strR As String, iR As Integer
     strR = Nz(DLookup("Email", "tbClientes", "IdCliente = " & lIdCliente), "")
     If strR = "" And intSiNoHayPedir Then
-        strR = Nz(myinputbox("Introduzca Email de Envío", "Dirección de Email:"), "")
+        strR = Nz(MyInputBox("Introduzca Email de Envío", "Dirección de Email:"), "")
         If strR <> "" Then
             iR = MsgBox("¿Grabar el email en la ficha del cliente?", vbYesNo + vbQuestion)
             If iR = vbYes Then CurrentDb.Execute "UPDATE tbClientes SET Email = " & ConComillas(strR, True) & " WHERE IdCliente = " & lIdCliente, dbFailOnError
@@ -304,7 +304,7 @@ Public Function EnviarFacturaXEmail(lngIdFactura As Long, Optional strEmail As S
             Exit Function
         End If
         Dim vFacs As Variant, i As Integer
-        If Right(strListaFacs, 1) = ";" Then strListaFacs = recdertop(strListaFacs, 1, 0)
+        If Right(strListaFacs, 1) = ";" Then strListaFacs = RecDerTop(strListaFacs, 1, 0)
         vFacs = Split(strListaFacs, ";")
         strListaFacs = ""
         For i = 0 To UBound(vFacs)
@@ -325,9 +325,9 @@ EnviarEmail:
     strMensaje = Nz(GetParam("ParrafoEnvioFacturaEmail_OK"), "Adjuntamos factura")
     strAsunto = "Factura: " & strFac
     If intInputBox Then
-        strEmail = Nz(myinputbox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
+        strEmail = Nz(MyInputBox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
         
-        strAsunto = Nz(myinputbox("Asunto:", "Asunto del mensaje:", "Factura: " & strFac), "")
+        strAsunto = Nz(MyInputBox("Asunto:", "Asunto del mensaje:", "Factura: " & strFac), "")
         If strAsunto = "" Then GoTo Salir_EnviarFacturaXEmail
     End If
 
@@ -394,9 +394,9 @@ EnviarEmail:
     strMensaje = Nz(GetParam("ParrafoEnvioAlbaranEmail_OK"), "Adjuntamos albarán")
     strAsunto = "Albarán Nº: " & DLookup("Numero", "tbAlbaranesEnvioCab", "idAlbaranECab = " & lIdAlbaranECab)
     If intInputBox Then
-        strEmail = Nz(myinputbox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
+        strEmail = Nz(MyInputBox("Enviar a email:", "Dirección de email donde enviar:", strEmail), "")
         
-        strAsunto = Nz(myinputbox("Asunto:", "Asunto del mensaje:", strAsunto), "")
+        strAsunto = Nz(MyInputBox("Asunto:", "Asunto del mensaje:", strAsunto), "")
         If strAsunto = "" Then GoTo HandleExit
     End If
 
@@ -765,11 +765,11 @@ Public Function PonParrafoEnvioFacturaEmail(Optional lngIdFactura As Long = 0, O
 
     Set rs = CurrentDb.OpenRecordset("qryFacturaEnvioEmail", dbOpenSnapshot)
     
-    strR = spNz(GetParam("FacturasMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos factura |NumFactura| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EstablecimientoNombre"))
+    strR = spnz(GetParam("FacturasMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos factura |NumFactura| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EstablecimientoNombre"))
     For i = 0 To rs.Fields.Count - 1
         strR = Replace(strR, "|" & rs(i).Name & "|", Nz(rs(i), ""))
     Next i
-    If intInputBox Then strR = Nz(myinputbox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
+    If intInputBox Then strR = Nz(MyInputBox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
     
     SetParam "ParrafoEnvioFacturaEmail_OK", IIf(strR = "", "-", strR), 12
     PonParrafoEnvioFacturaEmail = strR <> ""
@@ -800,11 +800,11 @@ Public Function PonParrafoEnvioAlbaranEmail(Optional lIdAlbaranECab As Long = 0,
 
     Set rs = CurrentDb.OpenRecordset("qryAlbaranEnvioEmail", dbOpenSnapshot)
     
-    strR = spNz(GetParam("AlbaranesMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos albarán Nº |NumAlbaran| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EmailFirma"))
+    strR = spnz(GetParam("AlbaranesMensajeEnvioEmail"), "Estimado |Cliente|" & vbCrLf & "Adjunto remitimos albarán Nº |NumAlbaran| " & vbCrLf & vbCrLf & "Reciba un cordial saludo." & vbCrLf & GetParam("EmailFirma"))
     For i = 0 To rs.Fields.Count - 1
         strR = Replace(strR, "|" & rs(i).Name & "|", Nz(rs(i), ""))
     Next i
-    If intInputBox Then strR = Nz(myinputbox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
+    If intInputBox Then strR = Nz(MyInputBox("Confirme mensaje a incluir", "Mensaje", strR, , True, strAdjuntarFicheros), "")
     
     SetParam "ParrafoEnvioAlbaranEmail_OK", IIf(strR = "", "-", strR), 12
     PonParrafoEnvioAlbaranEmail = strR <> ""

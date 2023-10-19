@@ -280,7 +280,7 @@ Public Function DesgloseIVAFactura(lIdFacturaCab As Long _
          & " ORDER BY IVA"
     Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
     While Not rs.EOF
-        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & llenaizq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & llenaizq(Format(rs("TIVA"), "currency"), 10)
+        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & LlenaIzq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & LlenaIzq(Format(rs("TIVA"), "currency"), 10)
         rs.MoveNext
     Wend
     If Len(sR) > 2 Then sR = Mid(sR, 3)
@@ -382,12 +382,3 @@ Error_ImprimirFacturas:
     End Select
     Resume Salir_ImprimirFacturas
 End Function
-
-Public Sub CargarImpresorasCmb(cmb As ComboBox)
-    Dim i As Integer, sImpresoras As String
-    For i = 0 To Application.Printers.Count - 1
-        sImpresoras = sImpresoras & Application.Printers(i).DeviceName & ";"
-    Next
-    sImpresoras = Left(sImpresoras, Len(sImpresoras) - 1)
-    cmb.RowSource = sImpresoras
-End Sub

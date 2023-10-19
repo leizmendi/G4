@@ -34,48 +34,48 @@ Private Declare Function apimciGetErrorString Lib "Winmm.dll" _
 Function mc_WavPlay()
 'Emitir un sonido por el altavoz del equipo.
 
-    Dim a As Long
+    Dim A As Long
     Dim strWav As String
     
     strWav = GetDBLocation & "Start.wav"
-    a = fPlayStuff(strWav)
+    A = fPlayStuff(strWav)
 
 End Function
 
-Function fPlayStuff(ByVal strFilename As String, Optional intPlayMode As Integer) As Long
+Function fPlayStuff(ByVal strFileName As String, Optional intPlayMode As Integer) As Long
 'MUST pass a filename _with_ extension, Supports Wav, AVI, MID type files
     
     Dim lngRet As Long
     Dim strTemp As String
 
-    Select Case LCase(fGetFileExt(strFilename))
+    Select Case LCase(fGetFileExt(strFileName))
         Case "wav":
             If Not IsMissing(intPlayMode) Then
-                lngRet = apiPlaySound(strFilename, intPlayMode)
+                lngRet = apiPlaySound(strFileName, intPlayMode)
             Else
                 MsgBox "Must specify play mode."
                 Exit Function
             End If
         Case "avi", "mid":
             strTemp = String$(256, 0)
-            lngRet = apimciSendString("play " & strFilename, strTemp, 255, 0)
+            lngRet = apimciSendString("play " & strFileName, strTemp, 255, 0)
     End Select
     fPlayStuff = lngRet
 
 End Function
 
-Function fStopStuff(ByVal strFilename As String)
+Function fStopStuff(ByVal strFileName As String)
 'Stops a multimedia playback
     
     Dim lngRet As Long
     Dim strTemp As String
     
-    Select Case LCase(fGetFileExt(strFilename))
+    Select Case LCase(fGetFileExt(strFileName))
         Case "Wav":
             lngRet = apiPlaySound(0, pcsASYNC)
         Case "avi", "mid":
             strTemp = String$(256, 0)
-            lngRet = apimciSendString("stop " & strFilename, strTemp, 255, 0)
+            lngRet = apimciSendString("stop " & strFileName, strTemp, 255, 0)
     End Select
     fStopStuff = lngRet
 
@@ -113,19 +113,19 @@ End Function
 
 Function fatest()
     
-    Dim a As Long
+    Dim A As Long
     
-    a = fStopStuff("C:\winnt\clock.avi")
+    A = fStopStuff("C:\winnt\clock.avi")
 
 End Function
 
 Function WavDone()
     
-    Dim a As Long
+    Dim A As Long
     Dim strWav As String
     
     strWav = GetDBLocation & "chimes.wav"
-    a = fPlayStuff(strWav)
+    A = fPlayStuff(strWav)
 
 End Function
 
@@ -138,7 +138,7 @@ End Function
 
 
 Function Play(strFile As String)
-    Dim a As Long
-    a = fPlayStuff(strFile)
+    Dim A As Long
+    A = fPlayStuff(strFile)
 '    a = fStopStuff(strFile)
 End Function

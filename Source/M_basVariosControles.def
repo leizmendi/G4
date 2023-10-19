@@ -1,0 +1,86 @@
+Option Compare Database
+Option Explicit
+
+Public Function X100()
+'Sirve para controles de % que si se introduce 16, coja 16% y no 1600%
+    On Error Resume Next
+    If Screen.ActiveControl.Value > 1 Then
+        Screen.ActiveControl.Value = Screen.ActiveControl.Value / 100
+        Call X100
+    End If
+End Function
+
+Public Function X100IVA(sngValor As Single, intCancel As Integer)
+'Sirve para controles de % que si se introduce 16, coja 16% y no 1600%
+    Dim strValor As String
+    'On Error Resume Next
+bucleX100IVA:
+    If sngValor > 1 Then
+        sngValor = sngValor / 100
+        GoTo bucleX100IVA
+    End If
+    strValor = Format$(sngValor, "0.00")
+    Mid(strValor, 2, 1) = "."
+    If IsNull(DLookup("TipoIVA", "tbTiposIVA", "IVA = " & strValor)) Then
+        intCancel = True
+    Else
+        intCancel = False
+    End If
+End Function
+
+Public Function AMayus()
+    On Error Resume Next
+    Screen.ActiveControl = Trim(UCase(Screen.ActiveControl))
+End Function
+
+Public Sub VerControles(obj As Object, strTag As String, intVer As Integer)
+'para visibilizar o invisibilizar controles.
+    Dim ctl As Control
+    On Error GoTo Error_VerControles
+    
+    For Each ctl In obj.Controls
+        If ctl.Tag = strTag Then
+            ctl.Visible = intVer
+        End If
+    Next ctl
+
+Salir_VerControles:
+    Exit Sub
+Error_VerControles:
+    Select Case Err
+        Case Else
+            MsgBox Err.Description
+            Resume Salir_VerControles
+    End Select
+
+End Sub
+
+Public Sub CargarImpresorasCmb(cmb As ComboBox)
+    Dim i As Integer, sImpresoras As String
+    For i = 0 To Application.Printers.Count - 1
+        sImpresoras = sImpresoras & Application.Printers(i).DeviceName & ";"
+    Next
+    sImpresoras = Left(sImpresoras, Len(sImpresoras) - 1)
+    cmb.RowSource = sImpresoras
+End Sub
+
+
+Public Sub MascaraFechasForm(frm As Form)
+    On Error GoTo Error_MascaraFechasForm
+    Dim ctl As Control, strMask As String
+    strMask = IIf(Nz(DameValorParam("FormatoFechaEUS_SN"), False) = False, "00/00/0099", "0099/00/00")
+    For Each ctl In frm.Controls
+        If ctl.Format = "Short Date" Then ctl.InputMask = strMask
+    Next ctl
+Salir_MascaraFechasForm:
+    Exit Sub
+Error_MascaraFechasForm:
+    Select Case Err
+        Case 438 ' el control no tiene la propiedad formato
+            Resume Next
+        Case Else
+            MsgBox "Error nº " & Err & " en MascaraFechasForm" & vbCrLf & Err.Description
+            Resume Salir_MascaraFechasForm
+    End Select
+
+End Sub

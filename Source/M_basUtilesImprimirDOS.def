@@ -1,0 +1,105 @@
+Option Explicit
+Option Compare Database
+
+Private Declare Sub Anjan Lib "vbio.dll" ()
+'Private Declare Function Inp Lib "vbio.dll" (ByVal portaddr&) As Integer
+Private Declare Function Inpw Lib "vbio.dll" (ByVal portaddr&) As Long
+'Private Declare Sub Out Lib "vbio.dll" (ByVal port&, ByVal byt%)
+'Private Declare Sub Outw Lib "vbio.dll" (ByVal port&, ByVal wrd&)
+'Private Declare Function Peek Lib "vbio.dll" (ByVal memaddr&) As Integer
+'Private Declare Function Peekw Lib "vbio.dll" (ByVal memaddr&) As Long
+'Private Declare Function Poke Lib "vbio.dll" (ByVal memaddr&, ByVal byt%) As Integer
+'Private Declare Function Pokew Lib "vbio.dll" (ByVal memaddr&, ByVal wrd&) As Integer
+Private Declare Function GetLptBaseAddr Lib "vbio.dll" (ByVal lpt&) As Integer
+Private Declare Function GetComBaseAddr Lib "vbio.dll" (ByVal com&) As Integer
+'Private Declare Sub Enable Lib "vbio.dll" ()
+'Private Declare Sub Disable Lib "vbio.dll" ()
+'Private Declare Sub Delay Lib "vbio.dll" (ByVal count&)
+'Private Declare Sub AboutVBIO Lib "vbio.dll" ()
+
+Public Sub ImprimirDOS(strFile As String, strPuerto As String, Optional intBloc As Integer = 88)
+If intBloc = 88 Then intBloc = Nz(DameValorParam("ImprimirAlBlocDeNotas"), False)
+    If intBloc = True Then
+        Shell "Notepad " & strFile, vbMaximizedFocus
+        Exit Sub
+    End If
+    Const MaxSize = 1024     'max buffer size
+    Dim Chunk As String      'buffer to hold data
+    Dim numLoops As Long     'number of 8k loops
+    Dim LeftOver As Integer  'amount of file left
+    Dim i As Integer         'counter for loops
+    Dim j As Integer, j2 As Long
+    Dim intRes As Integer
+    Static intAnjan As Integer
+    On Error GoTo Error_ImprimirDOS
+    GoTo PuertoDesconocido ' para pasar de comprobar si está On Line (W2000)
+    If intAnjan = False Then
+        Anjan
+        intAnjan = True
+    End If
+    If Mid(strPuerto, Len(strPuerto) - 3, 3) = "LPT" Then
+        Select Case Right(strPuerto, 1)
+            Case "1", "2", "3"
+                j = GetLptBaseAddr(CInt(Right(strPuerto, 1)))
+            Case Else
+                GoTo PuertoDesconocido
+        End Select
+    ElseIf Mid(strPuerto, Len(strPuerto) - 3, 3) = "COM" Then
+        Select Case Right(strPuerto, 1)
+            Case "1", "2", "3", "4"
+                j = GetComBaseAddr(CInt(Right(strPuerto, 1)))
+            Case Else
+                GoTo PuertoDesconocido
+        End Select
+    Else
+        GoTo PuertoDesconocido
+    End If
+LeerImpresora:
+    j2 = Inpw(j)
+    If (j2 And &H800) <> 0 Then
+        'MsgBox "ON LINE"
+    Else
+        intRes = MsgBox("La impresora del puerto " & strPuerto & " está OFF LINE", vbRetryCancel + vbExclamation, "ATENCIÓN")
+        If intRes = vbCancel Then Exit Sub
+        GoTo LeerImpresora
+    End If
+PuertoDesconocido:
+    
+    'open our datafile and printer port
+    
+    
+    Open strFile For Binary As #1
+    Open strPuerto For Binary As #2
+    
+    'calculate size of file and amount left over
+    numLoops = LOF(1) \ MaxSize
+    LeftOver = LOF(1) Mod MaxSize
+    
+    'initialize variables and loop
+    Chunk = Space$(MaxSize)
+    For i = 1 To numLoops
+        Get #1, , Chunk
+        Put #2, , Chunk
+    Next
+    
+    'grab what's leftover
+    Chunk = Space$(LeftOver)
+    Get #1, , Chunk
+    Put #2, , Chunk
+    
+    'close all our open files
+    Close #2
+    Close #1
+Salir_ImprimirDOS:
+    Exit Sub
+Error_ImprimirDOS:
+    Select Case Err
+        Case 48 ' ¿no se encuentra vbio.dll?
+            Resume PuertoDesconocido
+        Case Else
+            MsgBox "error nº " & Err & " en ImprimirDOS" & vbCrLf & Err.Description
+            Close
+            Resume Salir_ImprimirDOS
+    End Select
+End Sub
+ 
