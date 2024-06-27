@@ -40,7 +40,8 @@ End Function
 Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
                                        , Optional sDispositivoId As String = "" _
                                        , Optional ByRef sIdDoc As String = "" _
-                                       , Optional ByRef sFolDocId As String) As Boolean
+                                       , Optional ByRef sFolDocId As String _
+                                       , Optional bDetallePrendas As Boolean = True) As Boolean
     'Envia PDF del albarán al dispositivo para la firma
     'Caso de ir todo bien devuelve el DocumentId generado
     On Error GoTo HandleError
@@ -55,7 +56,11 @@ Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
     On Error Resume Next
     Kill sFilePDF
     On Error GoTo HandleError
-    PrintReportAsPDF "rptAlbaran", "IdAlbaranECab = " & lIdAlbECab, sFilePDF, TituloAlbaran(lIdAlbECab), , , False
+    
+    Dim sXML As String
+    ponxml sXML, "DetallePrendas", IIf(bDetallePrendas = True, "S", "N")
+
+    PrintReportAsPDF "rptAlbaran", "IdAlbaranECab = " & lIdAlbECab, sFilePDF, TituloAlbaran(lIdAlbECab), , , False, sXML
     'Espera hasta encontrar el PDF generado
     If Dir(sFilePDF) = "" Then
         dtIni = Now()
@@ -258,12 +263,12 @@ End Function
 
 
 Function GetDevices_RowSource(ByRef oDevs As Object) As String
-    Dim sDevicesJson  As String, key As Variant, sDescripcion As String, sR As String
+    Dim sDevicesJson  As String, Key As Variant, sDescripcion As String, sR As String
     sDevicesJson = GetDevices
     Set oDevs = ParseJson(sDevicesJson)
-    For Each key In oDevs
-        sR = sR & ";" & CStr(key) & ";" & oDevs(CStr(key))
-    Next key
+    For Each Key In oDevs
+        sR = sR & ";" & CStr(Key) & ";" & oDevs(CStr(Key))
+    Next Key
     If Len(sR) > 1 Then sR = Mid(sR, 2)
     GetDevices_RowSource = sR
     

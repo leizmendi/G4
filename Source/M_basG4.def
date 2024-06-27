@@ -77,14 +77,15 @@ HandleError:
 End Function
 
 Public Function DimeCliente(lngIdCliente As Long _
-                            , Optional bCabeceraCliente As Boolean = False) As String
+                            , Optional bCabeceraCliente As Boolean = False _
+                            , Optional sSiNoHay As String = "¿?") As String
     On Error GoTo HandleError
     Dim strR As String, iTipo As Integer
     iTipo = Nz(DLookup("Tipo", "tbClientes", "IdCliente = " & lngIdCliente), 1)
     If iTipo = 1 Then
-        strR = Nz(DLookup("RazonSocial", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
+        strR = Nz(DLookup("RazonSocial", "tbClientes", "IdCliente = " & lngIdCliente), sSiNoHay)
     Else
-        strR = Nz(DLookup("[Nombre] & ' '& [Apellidos]", "tbClientes", "IdCliente = " & lngIdCliente), "¿?")
+        strR = Nz(DLookup("[Nombre] & ' '& [Apellidos]", "tbClientes", "IdCliente = " & lngIdCliente), sSiNoHay)
     End If
     If bCabeceraCliente Then
         strR = strR & vbCrLf & Nz(DLookup("Direccion", "tbClientes", "IdCliente = " & lngIdCliente), "-")
@@ -223,6 +224,13 @@ Public Function SetPrendaEstado(lIdPrenda As Long _
     ElseIf bRestarLavado Then
         sSQL = sSQL & ", CantLavados = CantLavados - 1"
     End If
+    If iEstado = Cliente Then
+        sSQL = sSQL & ", IdAlbaranECab = " & lIdDestino
+    ElseIf iEstado = Empaquetado Then
+        sSQL = sSQL & ", IdPackCab = " & lIdDestino & ", IdAlbaranECab = Null"
+    ElseIf iEstado = Baja Then
+        sSQL = sSQL & ", IdPackCab = Null, IdAlbaranECab = Null, FechaBaja = " & ComaPunto(CDbl(dtNow))
+    End If
     sSQL = sSQL & " WHERE IdPrenda = " & lIdPrenda
     CurrentDb.Execute sSQL, dbFailOnError
     sSQL = "INSERT INTO tbPrendaHis(IdPrenda, Fecha, Estado, IdDestino)" & _
@@ -284,6 +292,27 @@ Public Function DetallePack(lIdPackCab As Long) As String
         rs.MoveNext
     Wend
     DetallePack = sR
+End Function
+
+Public Function DestinoPack(lIdPackCab As Long) As String
+    'Devuelve string de Destino de Pack
+    On Error Resume Next
+    Dim rs As Recordset, sR As String, sSQL As String
+    sSQL = "SELECT tbPacksCab.IdPackCab, tbAlbaranesEnvioDet.IdPackCab, tbAlbaranesEnvioCab.Numero, tbAlbaranesEnvioCab.Fecha, tbAlbaranesEnvioCab.FechaEntregado, tbClientes.IdCliente, tbClientes.RazonSocial, tbClientes.Nombre, tbClientes.Apellidos" _
+        & " FROM tbClientes RIGHT JOIN (tbAlbaranesEnvioCab RIGHT JOIN (tbPacksCab LEFT JOIN tbAlbaranesEnvioDet ON tbPacksCab.IdPackCab = tbAlbaranesEnvioDet.IdPackCab) ON tbAlbaranesEnvioCab.IdAlbaranECab = tbAlbaranesEnvioDet.IdAlbaranECab) ON tbClientes.IdCliente = tbAlbaranesEnvioCab.IdCliente" _
+        & " WHERE tbPacksCab.IdPackCab = " & lIdPackCab
+
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    If rs.EOF Then
+        sR = "¿?"
+    Else
+        If IsNull(rs("tbAlbaranesEnvioDet.IdPackCab")) Then
+            sR = "Paquete en almacen (No albarán)"
+        Else
+            sR = Trim(rs("RazonSocial") & " " & rs("Nombre") & " " & rs("Apellidos")) & ": Albarán Nº " & rs("Numero") & ", " & Format(rs("Fecha"), "dd/mm/yy")
+        End If
+    End If
+    DestinoPack = sR
 End Function
 
 Public Function DimeView() As AcView
@@ -360,6 +389,7 @@ Public Function AddAlbaranDet(lIdAECab As Long _
     End If
     bIVAinc = DLookup("IVAincluido", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAECab)
     cIVA = GetParam("Facturacion_IVApredeterminado")
+    If Nz(DLookup("ComunitarioSN", "tbClientes", "IdCliente = " & lIdCli), False) = True Then cIVA = 0
     If lIdPack <> 0 Then
         'Comprueba si el Pack se encuentra ya en otro albarán
         If Not IsNull(DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab = " & lIdPack)) Then
@@ -487,7 +517,7 @@ End Function
 Public Sub AbreAlbaran(lIdAECab As Long)
     On Error GoTo HandleError
     Dim sXML As String
-    PonXML sXML, "IdAlbaranECab", Nz(lIdAECab, 0)
+    ponxml sXML, "IdAlbaranECab", Nz(lIdAECab, 0)
     If IsOpenForm("frmAlbaran") Then DoCmd.Close acForm, "frmAlbaran"
     DoCmd.OpenForm "frmAlbaran", , , , , , sXML
 HandleExit:
@@ -528,14 +558,14 @@ Public Function DesgloseIVAAlbaran(lIdAECab As Long _
                         , Optional bSaltoLinea As Boolean = False) As String
     On Error GoTo HandleError
     Dim sSQL As String, rs As Recordset, sR As String
-    sSQL = "SELECT Sum(Base) as TBase, IVA, Round(Sum(Base)* IVA,2) as TIVA" _
+    sSQL = "SELECT Sum(Base) as TBase, IVA, Round(Sum(Base)* IVA,3) as TIVA" _
          & " FROM tbAlbaranesEnvioDet" _
          & " WHERE IdAlbaranECab = " & lIdAECab _
          & " GROUP BY IVA" _
          & " ORDER BY IVA"
     Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
     While Not rs.EOF
-        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & LlenaIzq(" s/" & Format(rs("TBase"), "#,##0.00"), 10) & LlenaIzq(Format(rs("TIVA"), "currency"), 10)
+        sR = sR & IIf(bSaltoLinea, vbCrLf, ", ") & Format(rs("IVA"), "0.0%") & LlenaIzq(" s/" & Format(rs("TBase"), "#,##0.000"), 10) & LlenaIzq(Format(rs("TIVA"), "#,##0.000 €"), 10)
         rs.MoveNext
     Wend
     If Len(sR) > 2 Then sR = Mid(sR, 3)
@@ -725,6 +755,119 @@ Public Function AlbaranFilePDF(lIdAlbECab As Long, Optional bSigned As Boolean =
     Dim sR As String
     sR = "Albarán Garbitxukun " & DLookup("Numero", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab) & IIf(bSigned, "_signed", "") & ".pdf"
     AlbaranFilePDF = sR
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Sub PonPrendaEstado_SegunHis(lIdPrenda As Long)
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset
+    sSQL = "SELECT TOP 1 *" _
+        & " FROM tbPrendaHis" _
+        & " WHERE IdPrenda = " & lIdPrenda _
+        & " ORDER BY FECHA DESC, IdPrendaHis DESC"
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    sSQL = "UPDATE tbPrendas"
+    If Not rs.EOF Then
+        sSQL = sSQL & " SET Estado = " & ConComillas(rs("Estado"))
+        Select Case rs("Estado")
+            Case "C"
+                sSQL = sSQL & ", IdAlbaranECab = " & Nz(rs("IdDestino"), 0)
+            Case "E"
+                sSQL = sSQL & ", IdPackCab = " & Nz(rs("IdDestino"), 0) & ", IdAlbaranECab = Null"
+        End Select
+    Else
+        sSQL = sSQL & " SET Estado = Null, IdPackCab = Null, IdAlbaranECab = Null"
+    End If
+    sSQL = sSQL & " WHERE IdPrenda = " & lIdPrenda
+    CurrentDb.Execute sSQL, dbFailOnError
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+Public Sub PonPrendaEstado_SegunHis_ALL()
+    On Error GoTo HandleError
+    Dim sSQL As String, rs As Recordset, y As Long, z As Long
+    sSQL = "SELECT IdPrenda" _
+        & " FROM tbPrendas"
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    rs.MoveLast
+    rs.MoveFirst
+    z = rs.RecordCount
+    While Not rs.EOF
+        DoEvents
+        y = y + 1
+        SysCmd acSysCmdSetStatus, "PonPrendaEstado_SegunHis " & y & "/" & z
+        PonPrendaEstado_SegunHis rs("IdPrenda")
+        rs.MoveNext
+    Wend
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub
+
+
+Public Function DimeClienteDeAlbaran(lIdAlbaranECab As Long) As String
+    On Error GoTo HandleError
+    DimeClienteDeAlbaran = DimeCliente(Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbaranECab), 0), , "-")
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+
+Public Function DimePacks(lIdAlbaranECab As Long, sConcepto As String, Optional bYPrendas As Boolean = True) As String
+    'Devuelve lista de IdPacks separada por comas de los packs del albarán con ese concepto
+    On Error GoTo HandleError
+    Dim rs As Recordset, sSQL As String, sR As String, sP As String
+    sSQL = "SELECT IdPackCab FROM tbAlbaranesEnvioDet WHERE IdAlbaranECab = " & lIdAlbaranECab & " AND Concepto = '" & sConcepto & "'"
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        sR = sR & "," & rs(0)
+        sP = sP & vbCrLf & "Pack: " & rs(0) & ", prendas: " & DimePrendasPack(rs(0))
+        rs.MoveNext
+    Wend
+    If Len(sR) > 1 Then
+        sR = Mid(sR, 2)
+        sP = Mid(sP, 3)
+    End If
+    If bYPrendas Then
+        DimePacks = sP
+    Else
+        DimePacks = sR
+    End If
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function DimePrendasPack(lIdPackCab As Long) As String
+    'Devuelve lista de IdPacks separada por comas de los packs del albarán con ese concepto
+    On Error GoTo HandleError
+    Dim rs As Recordset, sSQL As String, sR As String
+    sSQL = "SELECT IdPrenda FROM tbPacksDet WHERE IdPackCab = " & lIdPackCab
+    Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+    While Not rs.EOF
+        sR = sR & "," & rs(0)
+        rs.MoveNext
+    Wend
+    If Len(sR) > 1 Then sR = Mid(sR, 2)
+    DimePrendasPack = sR
 HandleExit:
     Exit Function
 HandleError:
