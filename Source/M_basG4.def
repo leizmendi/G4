@@ -112,7 +112,7 @@ Public Sub PonGruposCliente(lngIdCliente As Long)
         strR = strR & rs(0) & ", "
         rs.MoveNext
     Wend
-    If Len(strR) > 2 Then strR = RecDerTop(strR, 2, 150)
+    If Len(strR) > 2 Then strR = recdertop(strR, 2, 150)
     strSQL = "UPDATE tbClientes SET Grupos = " & ConComillas(strR) & " WHERE IdCliente = " & lngIdCliente
     CurrentDb.Execute strSQL, dbFailOnError
 HandleExit:
@@ -753,8 +753,22 @@ End Function
 Public Function AlbaranFilePDF(lIdAlbECab As Long, Optional bSigned As Boolean = False) As String
     On Error GoTo HandleError
     Dim sR As String
-    sR = "Albarán Garbitxukun " & DLookup("Numero", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab) & IIf(bSigned, "_signed", "") & ".pdf"
-    AlbaranFilePDF = sR
+    sR = "alb_gt_" & DLookup("Numero", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab) & "_" & AlbaranAlias(lIdAlbECab) & IIf(bSigned, "_signed", "") & ".pdf"
+    AlbaranFilePDF = Replace(sR, " ", "_")
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function AlbaranAlias(lIdAlbECab As Long) As String
+    On Error GoTo HandleError
+    Dim sR As String, lIdCli As Long
+    lIdCli = DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAlbECab)
+    sR = Nz(DLookup("Alias", "tbClientes", "IdCliente = " & lIdCli), "")
+    If sR = "" Then sR = DimeCliente(lIdCli, False, "---")
+    AlbaranAlias = recdertop(Replace(Replace(Replace(sR, vbCrLf, "-"), vbLf, "-"), vbCr, "-"), 0, 25)
 HandleExit:
     Exit Function
 HandleError:
@@ -874,3 +888,93 @@ HandleError:
     MsgBox Err.Description
     Resume HandleExit
 End Function
+
+Public Sub ActualizarEstadosAlbaran(IdAlbaranECab As Long)
+    On Error GoTo HandleError
+
+    Dim rs As DAO.Recordset
+    Dim db As DAO.Database
+    Dim strSQL As String
+    'Dim documentId As String, lIdAD As Long
+    Dim sFile As String, sCarpeta As String, bSigned As Boolean, dtFile As Date
+    Dim Estado As String, dtSigned As Date
+    Dim sCPDF As String, sFilePDF As String
+
+    ' Abre la base de datos actual
+    Set db = CurrentDb()
+
+    ' Prepara la consulta SQL para obtener registros de tbAlbaranes_Dispositivo
+    ' que corresponden al IdAlbaranECab proporcionado
+    strSQL = "SELECT IdAlbaranDispositivo, FolDocumentId, EmailSN FROM tbAlbaranes_Dispositivo WHERE IdAlbaranECab = " & IdAlbaranECab
+
+    ' Abre el recordset
+    Set rs = db.OpenRecordset(strSQL, dbOpenSnapshot)
+
+    ' Recorre los registros
+    If Not rs.EOF Then
+        rs.MoveFirst
+        Do While Not rs.EOF
+            dtSigned = 0
+            dtFile = 0
+            bSigned = True
+VerEstado:
+            'Ver si está el documento en la carpeta de firmados
+            If bSigned = True Then
+                sCarpeta = Nz(DameValorParam("CarpetaAlbaranesFirmados"), "")
+            Else
+                sCarpeta = Nz(DameValorParam("CarpetaAlbaranesPDF"), "")
+            End If
+            If sCarpeta = "" Then
+                MsgBox "Se debe indicar la carpeta de albaranes firmados en Parámetros", vbExclamation
+                GoTo HandleExit
+            End If
+            sFile = AlbaranFilePDF(IdAlbaranECab, bSigned)
+            If Dir(sCarpeta & sFile) <> "" Then
+                
+                If bSigned Then
+                    Estado = "Firmado"
+                    dtSigned = DateFileModif(sCarpeta & sFile)
+                Else
+                    Estado = "Enviado"
+                    dtFile = DateFileModif(sCarpeta & sFile)
+                End If
+                GoTo Grabar
+            End If
+            If bSigned = True Then
+                bSigned = False
+                GoTo VerEstado
+            End If
+            Estado = "No se encuentra"
+Grabar:
+
+            ' Actualiza el campo Estado en la tabla tbAlbaranes_Dispositivo
+            strSQL = "UPDATE tbAlbaranes_Dispositivo SET Status = '" & Estado & "'"
+            If dtSigned <> 0 Then strSQL = strSQL & ", FechaFirmado = #" & Format(dtSigned, "yyyy-mm-dd hh:nn:ss") & "#"
+            'If dtFile <> 0 Then strSQL = strSQL & ", FechaEntregado = #" & Format(dtFile, "yyyy-mm-dd hh:nn:ss") & "#"
+            strSQL = strSQL & " WHERE IdAlbaranDispositivo = " & rs("IdAlbaranDispositivo")
+            CurrentDb.Execute strSQL, dbFailOnError
+            If Estado = "Firmado" And rs("EmailSN") = False Then
+                If EnviarAlbaranFirmadoXEmail(rs("IdAlbaranDispositivo")) = True Then
+                    strSQL = "UPDATE tbAlbaranes_Dispositivo SET EmailSN = True" _
+                            & " WHERE IdAlbaranDispositivo = " & rs("IdAlbaranDispositivo")
+                    CurrentDb.Execute strSQL, dbFailOnError
+                    strSQL = "UPDATE tbAlbaranesEnvioCab SET EmailSN = True" _
+                            & " WHERE IdAlbaranECab = " & IdAlbaranECab
+                    CurrentDb.Execute strSQL, dbFailOnError
+                End If
+            End If
+            ' Mueve al siguiente registro
+            rs.MoveNext
+        Loop
+    End If
+
+    ' Cierra el recordset y libera recursos
+    rs.Close
+    Set rs = Nothing
+    Set db = Nothing
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub

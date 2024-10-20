@@ -38,8 +38,8 @@ Public Function DocStatusTxt(iStatus As FirmaDocStatus) As String
 End Function
 
 Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
-                                       , Optional sDispositivoId As String = "" _
-                                       , Optional ByRef sIdDoc As String = "" _
+                                       , Optional sDispositivoId As String = "-" _
+                                       , Optional ByRef sIdDoc As String = "-" _
                                        , Optional ByRef sFolDocId As String _
                                        , Optional bDetallePrendas As Boolean = True) As Boolean
     'Envia PDF del albarán al dispositivo para la firma
@@ -47,9 +47,8 @@ Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
     On Error GoTo HandleError
     'Generar PDF del albarán
     Dim sFilePDF As String, sCarpeta As String, dtIni As Date, dtNow As Date
-    Dim bR As Boolean, sCurrentDir As String
+    Dim bR As Boolean
     sCarpeta = Nz(GetParam("CarpetaAlbaranesPDF"), "AlbaranesPDF")
-    sCurrentDir = DirectorioDe(CurrentDb.Name)
     If Right(sCarpeta, 1) <> "\" Then sCarpeta = sCarpeta & "\"
     
     sFilePDF = sCarpeta & AlbaranFilePDF(lIdAlbECab)
@@ -76,119 +75,76 @@ Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
         Wend
         DoCmd.Hourglass False
     End If
-    Dim sDeviceId As String _
-        , sDocumentName As String _
-        , sB64PDFContent As String _
-        , sDescription As String _
-        , sTextoAMostrar As String _
-        , iFontSize As Integer _
-        , lBoxWidth As Long _
-        , lBoxHeight As Long _
-        , iBoxPage As Integer _
-        , lBoxX As Long _
-        , lBoxY As Long _
-        , bAutoOpen As Boolean
-    Dim sResponse As String
-    'sB64PDFContent = ConvertirPDFaBase64(sFilePDF, sCurrentDir)
-    sB64PDFContent = ConvertBinaryToBase64(sFilePDF)
+    Dim sDeviceId As String
     sDeviceId = IIf(sDispositivoId = "", Nz(GetParam("FolDeviceId"), ""), sDispositivoId)
     If sDeviceId = "" Then
         MsgBox "Se debe indicar dispositivo de firma predeterminado", vbExclamation
         GoTo HandleExit
     End If
-    sDocumentName = AlbaranFilePDF(lIdAlbECab)
-    sDescription = TituloAlbaran(lIdAlbECab)
-    sIdDoc = "IdAlbaranECab_" & CStr(lIdAlbECab)
-    Dim iC As Integer, sMsg As String, iR As Integer, i As Integer
-    iC = Nz(DCount("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento like '" & sIdDoc & "*'"), 0)
-    
-    If iC > 0 Then
-        sMsg = "Ya se ha enviado el albarán anteriormente " & IIf(iC > 1, " " & iC & " veces", "") & vbCrLf & "¿Volver a enviarlo?"
-        iR = MsgBox(sMsg, vbOKCancel + vbQuestion)
-        If iR = vbCancel Then GoTo HandleExit
-        While Not IsNull(DLookup("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento = '" & sIdDoc & "_" & i & "'"))
-            i = i + 1
-            If i > 10 Then
-                MsgBox "Se ha enviado 10 veces!!!?", vbExclamation
-                GoTo HandleExit
-            End If
-        Wend
-        sIdDoc = sIdDoc & "_" & i
-    End If
-        
-    sTextoAMostrar = Nz(GetParam("FolBoxTexto"), "Firma: ")
-    lBoxWidth = Nz(GetParam("FolBoxAncho"), 200)
-    lBoxHeight = Nz(GetParam("FolBoxAlto"), 50)
-    lBoxX = Nz(GetParam("FolBoxX"), 50)
-    lBoxY = Nz(GetParam("FolBoxY"), 350)
-    iFontSize = Nz(GetParam("FolBoxFontSize"), 4)
-    bR = PostDocument(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc _
-                             , sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, 1, lBoxX, lBoxY, False, sResponse)
-    'MsgBox sResponse, vbInformation
-    If bR Then sFolDocId = Replace(sResponse, """", "")
+    sFolDocId = sFilePDF
+    bR = True
+'----------------------------------------------------------------------------------------------------------------------------------------------------
+    ' Se prescinde del envío a dispositivo de FirmarOnLine.......,,,,,.......................................................
+'
+'    Dim sDeviceId As String _
+'        , sDocumentName As String _
+'        , sB64PDFContent As String _
+'        , sDescription As String _
+'        , sTextoAMostrar As String _
+'        , iFontSize As Integer _
+'        , lBoxWidth As Long _
+'        , lBoxHeight As Long _
+'        , iBoxPage As Integer _
+'        , lBoxX As Long _
+'        , lBoxY As Long _
+'        , bAutoOpen As Boolean
+'    Dim sResponse As String
+'    'sB64PDFContent = ConvertirPDFaBase64(sFilePDF, sCurrentDir)
+'    sB64PDFContent = ConvertBinaryToBase64(sFilePDF)
+'    sDeviceId = IIf(sDispositivoId = "", Nz(GetParam("FolDeviceId"), ""), sDispositivoId)
+'    If sDeviceId = "" Then
+'        MsgBox "Se debe indicar dispositivo de firma predeterminado", vbExclamation
+'        GoTo HandleExit
+'    End If
+'    sDocumentName = AlbaranFilePDF(lIdAlbECab)
+'    sDescription = TituloAlbaran(lIdAlbECab)
+'    sIdDoc = "IdAlbaranECab_" & CStr(lIdAlbECab)
+'    Dim iC As Integer, sMsg As String, iR As Integer, i As Integer
+'    iC = Nz(DCount("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento like '" & sIdDoc & "*'"), 0)
+'
+'    If iC > 0 Then
+'        sMsg = "Ya se ha enviado el albarán anteriormente " & IIf(iC > 1, " " & iC & " veces", "") & vbCrLf & "¿Volver a enviarlo?"
+'        iR = MsgBox(sMsg, vbOKCancel + vbQuestion)
+'        If iR = vbCancel Then GoTo HandleExit
+'        While Not IsNull(DLookup("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento = '" & sIdDoc & "_" & i & "'"))
+'            i = i + 1
+'            If i > 10 Then
+'                MsgBox "Se ha enviado 10 veces!!!?", vbExclamation
+'                GoTo HandleExit
+'            End If
+'        Wend
+'        sIdDoc = sIdDoc & "_" & i
+'    End If
+'
+'    sTextoAMostrar = Nz(GetParam("FolBoxTexto"), "Firma: ")
+'    lBoxWidth = Nz(GetParam("FolBoxAncho"), 200)
+'    lBoxHeight = Nz(GetParam("FolBoxAlto"), 50)
+'    lBoxX = Nz(GetParam("FolBoxX"), 50)
+'    lBoxY = Nz(GetParam("FolBoxY"), 350)
+'    iFontSize = Nz(GetParam("FolBoxFontSize"), 4)
+'    bR = PostDocument(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc _
+'                             , sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, 1, lBoxX, lBoxY, False, sResponse)
+'    'MsgBox sResponse, vbInformation
+'    If bR Then sFolDocId = Replace(sResponse, """", "")
+'----------------------------------------------------------------------------------------------------------------------------------------------------
     EnviaAlbaranADispositivo = bR
 HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume HandleExit
+    Resume 'HandleExit
 End Function
 
-
-Private Function PostDocument_OLD(sDeviceId As String _
-                            , sDocumentName As String _
-                            , sB64PDFContent As String _
-                            , sDescription As String _
-                            , sIdDoc As String _
-                            , Optional sTextoAMostrar As String = "Firma: " _
-                            , Optional iFontSize As Integer = 4 _
-                            , Optional lBoxWidth As Long = 200 _
-                            , Optional lBoxHeight As Long = 50 _
-                            , Optional iBoxPage As Integer = 1 _
-                            , Optional lBoxX As Long = 50 _
-                            , Optional lBoxY As Long = 350 _
-                            , Optional bAutoOpen As Boolean _
-                            , Optional ByRef sResponse As String) As Boolean
-
-    On Error GoTo HandleError
-    Dim oHttp As MSXML2.XMLHTTP60
-    Dim sJSON As String
-    Dim bR As Boolean
-    
-    Set oHttp = New MSXML2.XMLHTTP60
-    ''' Ejemplo:
-    ' Preparamos los datos en formato JSON
-    sJSON = "{""deviceId"": """ & sDeviceId & """, " & _
-            """document"": {""name"": """ & sDocumentName & """, " & _
-            """b64PDFContent"": """ & sB64PDFContent & """, " & _
-            """description"": """ & sDescription & """, ""id"": """ & sIdDoc & """}, " & _
-            """widget"": {""customText"": [{""text"": """ & Replace(sTextoAMostrar, """", "'") & """, ""fontSize"": " & iFontSize & "}], " & _
-            """width"": " & lBoxWidth & ", ""height"": " & lBoxHeight & ", ""page"": " & iBoxPage & ", ""x"": " & lBoxX & ", ""y"": " & lBoxY & "}, " & _
-            """autoOpen"": " & IIf(bAutoOpen, "true", "false") & "}"
-    With oHttp
-        .Open "POST", BASE_URL & "Document", False
-        .setRequestHeader "Content-Type", "application/json"
-        .setRequestHeader "Api-Key", "" & API_KEY()
-
-        ' Si la API requiere autenticación u otras cabeceras, las añades aquí
-        .Send sJSON
-        If .Status = 201 Then
-            MsgBox "Documento enviado para la firma, ID: " & Replace(.responseText, """", "")
-            ' Trata la respuesta aquí. Puedes usar .responseText para obtener la respuesta en formato texto.
-            bR = True
-        Else
-            MsgBox "Error: " & .Status & " " & .statusText
-        End If
-    End With
-    sResponse = oHttp.responseText
-    Set oHttp = Nothing
-    PostDocument_OLD = bR
-HandleExit:
-    Exit Function
-HandleError:
-    MsgBox Err.Description
-    Resume HandleExit
-End Function
 
 Private Function GetDevices() As String
 
@@ -414,15 +370,15 @@ Public Function ConvertirPDFaBase64_old_python(sFilePDF As String, sOutputFolder
     sOutputFolder = Replace(sOutputFolder, "\", "/")
     sTempOutFile = sOutputFolder & "temp.txt"
     If ScriptPython(sScriptName, sTempOutFile, CVar(sOutputFolder)) = True Then
-        Dim Archivo As Integer, sRet As String
+        Dim archivo As Integer, sRet As String
         'Dim RutaArchivo As String
         ' Abre el archivo en modo lectura
-        Archivo = FreeFile
-        Open sTempOutFile For Input As Archivo
+        archivo = FreeFile
+        Open sTempOutFile For Input As archivo
         ' Lee todo el contenido en una sola cadena
-        sRet = Input$(LOF(Archivo), Archivo)
+        sRet = Input$(LOF(archivo), archivo)
         ' Cierra el archivo
-        Close Archivo
+        Close archivo
         'Kill sTempOutFile
         ConvertirPDFaBase64_old_python = sRet
     Else
@@ -561,7 +517,7 @@ HandleError:
     PostDocument = False
 End Function
 
-Public Sub ActualizarEstadosAlbaran(IdAlbaranECab As Long)
+Public Sub ActualizarEstadosAlbaran_FOL(IdAlbaranECab As Long) 'Se usaba este procedimiento sin el sufijo _FOL cuando utilizamos la API de FirmarOnLine
     On Error GoTo HandleError
 
     Dim rs As DAO.Recordset

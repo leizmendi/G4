@@ -18,3 +18,27 @@ Sub AbrirArchivoDesdeSO(rutaArchivo As String)
         MsgBox "No se pudo abrir el archivo."
     End If
 End Sub
+
+
+Public Function DateFileModif(sFilePath As String) As Variant
+    On Error GoTo HandleError
+    
+' Crear un objeto FileSystemObject
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    ' Verificar si el archivo existe
+    If fso.FileExists(sFilePath) Then
+        ' Obtener la fecha de modificación del archivo
+        Dim archivo As Object
+        Set archivo = fso.GetFile(sFilePath)
+        DateFileModif = archivo.DateLastModified
+    End If
+    
+    
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
