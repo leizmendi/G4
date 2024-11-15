@@ -82,67 +82,68 @@ Public Function EnviaAlbaranADispositivo(lIdAlbECab As Long _
         GoTo HandleExit
     End If
     sFolDocId = sFilePDF
-    bR = True
-'----------------------------------------------------------------------------------------------------------------------------------------------------
+    If Nz(GetParam("FolDeshabilitarSN"), True) = True Then
+        bR = True
     ' Se prescinde del envío a dispositivo de FirmarOnLine.......,,,,,.......................................................
-'
-'    Dim sDeviceId As String _
-'        , sDocumentName As String _
-'        , sB64PDFContent As String _
-'        , sDescription As String _
-'        , sTextoAMostrar As String _
-'        , iFontSize As Integer _
-'        , lBoxWidth As Long _
-'        , lBoxHeight As Long _
-'        , iBoxPage As Integer _
-'        , lBoxX As Long _
-'        , lBoxY As Long _
-'        , bAutoOpen As Boolean
-'    Dim sResponse As String
-'    'sB64PDFContent = ConvertirPDFaBase64(sFilePDF, sCurrentDir)
-'    sB64PDFContent = ConvertBinaryToBase64(sFilePDF)
-'    sDeviceId = IIf(sDispositivoId = "", Nz(GetParam("FolDeviceId"), ""), sDispositivoId)
-'    If sDeviceId = "" Then
-'        MsgBox "Se debe indicar dispositivo de firma predeterminado", vbExclamation
-'        GoTo HandleExit
-'    End If
-'    sDocumentName = AlbaranFilePDF(lIdAlbECab)
-'    sDescription = TituloAlbaran(lIdAlbECab)
-'    sIdDoc = "IdAlbaranECab_" & CStr(lIdAlbECab)
-'    Dim iC As Integer, sMsg As String, iR As Integer, i As Integer
-'    iC = Nz(DCount("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento like '" & sIdDoc & "*'"), 0)
-'
-'    If iC > 0 Then
-'        sMsg = "Ya se ha enviado el albarán anteriormente " & IIf(iC > 1, " " & iC & " veces", "") & vbCrLf & "¿Volver a enviarlo?"
-'        iR = MsgBox(sMsg, vbOKCancel + vbQuestion)
-'        If iR = vbCancel Then GoTo HandleExit
-'        While Not IsNull(DLookup("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento = '" & sIdDoc & "_" & i & "'"))
-'            i = i + 1
-'            If i > 10 Then
-'                MsgBox "Se ha enviado 10 veces!!!?", vbExclamation
-'                GoTo HandleExit
-'            End If
-'        Wend
-'        sIdDoc = sIdDoc & "_" & i
-'    End If
-'
-'    sTextoAMostrar = Nz(GetParam("FolBoxTexto"), "Firma: ")
-'    lBoxWidth = Nz(GetParam("FolBoxAncho"), 200)
-'    lBoxHeight = Nz(GetParam("FolBoxAlto"), 50)
-'    lBoxX = Nz(GetParam("FolBoxX"), 50)
-'    lBoxY = Nz(GetParam("FolBoxY"), 350)
-'    iFontSize = Nz(GetParam("FolBoxFontSize"), 4)
-'    bR = PostDocument(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc _
-'                             , sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, 1, lBoxX, lBoxY, False, sResponse)
-'    'MsgBox sResponse, vbInformation
-'    If bR Then sFolDocId = Replace(sResponse, """", "")
 '----------------------------------------------------------------------------------------------------------------------------------------------------
+    Else
+        Dim sDocumentName As String _
+            , sB64PDFContent As String _
+            , sDescription As String _
+            , sTextoAMostrar As String _
+            , iFontSize As Integer _
+            , lBoxWidth As Long _
+            , lBoxHeight As Long _
+            , iBoxPage As Integer _
+            , lBoxX As Long _
+            , lBoxY As Long _
+            , bAutoOpen As Boolean
+        Dim sResponse As String
+        'sB64PDFContent = ConvertirPDFaBase64(sFilePDF, sCurrentDir)
+        sB64PDFContent = ConvertBinaryToBase64(sFilePDF)
+        sDeviceId = IIf(sDispositivoId = "", Nz(GetParam("FolDeviceId"), ""), sDispositivoId)
+        If sDeviceId = "" Then
+            MsgBox "Se debe indicar dispositivo de firma predeterminado", vbExclamation
+            GoTo HandleExit
+        End If
+        sDocumentName = AlbaranFilePDF(lIdAlbECab)
+        sDescription = TituloAlbaran(lIdAlbECab)
+        sIdDoc = "IdAlbaranECab_" & CStr(lIdAlbECab)
+        Dim iC As Integer, sMsg As String, iR As Integer, i As Integer
+        iC = Nz(DCount("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento like '" & sIdDoc & "*'"), 0)
+    
+        If iC > 0 Then
+            sMsg = "Ya se ha enviado el albarán anteriormente " & IIf(iC > 1, " " & iC & " veces", "") & vbCrLf & "¿Volver a enviarlo?"
+            iR = MsgBox(sMsg, vbOKCancel + vbQuestion)
+            If iR = vbCancel Then GoTo HandleExit
+            While Not IsNull(DLookup("IdAlbaranDispositivo", "tbAlbaranes_Dispositivo", "IdDocumento = '" & sIdDoc & "_" & i & "'"))
+                i = i + 1
+                If i > 10 Then
+                    MsgBox "Se ha enviado 10 veces!!!?", vbExclamation
+                    GoTo HandleExit
+                End If
+            Wend
+            sIdDoc = sIdDoc & "_" & i
+        End If
+    
+        sTextoAMostrar = Nz(GetParam("FolBoxTexto"), "Firma: ")
+        lBoxWidth = Nz(GetParam("FolBoxAncho"), 200)
+        lBoxHeight = Nz(GetParam("FolBoxAlto"), 50)
+        lBoxX = Nz(GetParam("FolBoxX"), 50)
+        lBoxY = Nz(GetParam("FolBoxY"), 350)
+        iFontSize = Nz(GetParam("FolBoxFontSize"), 4)
+        bR = PostDocument(sDeviceId, sDocumentName, sB64PDFContent, sDescription, sIdDoc _
+                                 , sTextoAMostrar, iFontSize, lBoxWidth, lBoxHeight, 1, lBoxX, lBoxY, False, sResponse)
+        'MsgBox sResponse, vbInformation
+        If bR Then sFolDocId = Replace(sResponse, """", "")
+    '----------------------------------------------------------------------------------------------------------------------------------------------------
+    End If
     EnviaAlbaranADispositivo = bR
 HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
 End Function
 
 

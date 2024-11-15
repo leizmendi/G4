@@ -891,7 +891,10 @@ End Function
 
 Public Sub ActualizarEstadosAlbaran(IdAlbaranECab As Long)
     On Error GoTo HandleError
-
+    If Nz(GetParam("FolDeshabilitarSN"), True) = False Then
+        ActualizarEstadosAlbaran_FOL IdAlbaranECab
+        GoTo HandleExit
+    End If
     Dim rs As DAO.Recordset
     Dim db As DAO.Database
     Dim strSQL As String

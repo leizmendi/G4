@@ -304,7 +304,7 @@ Public Function EnviarFacturaXEmail(lngIdFactura As Long, Optional strEmail As S
             Exit Function
         End If
         Dim vFacs As Variant, i As Integer
-        If Right(strListaFacs, 1) = ";" Then strListaFacs = RecDerTop(strListaFacs, 1, 0)
+        If Right(strListaFacs, 1) = ";" Then strListaFacs = recdertop(strListaFacs, 1, 0)
         vFacs = Split(strListaFacs, ";")
         strListaFacs = ""
         For i = 0 To UBound(vFacs)
@@ -376,12 +376,14 @@ Public Function EnviarAlbaranFirmadoXEmail(lIdAlbaranDispositivo As Long, Option
             GoTo HandleExit
         End If
     End If
-    sAlbPdf = Nz(DLookup("file_pdf", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAlbaranDispositivo), "")
-    If sAlbPdf = "" Then
+    'sAlbPdf = Nz(DLookup("file_pdf", "tbAlbaranes_Dispositivo", "IdAlbaranDispositivo = " & lIdAlbaranDispositivo), "")
+    sAlbPdf = GetParam("CarpetaAlbaranesFirmados") & AlbaranFilePDF(lIdAlbaranECab, True)
+    
+    If Dir(sAlbPdf) = "" Then
         MsgBox "No se encontró PDF correspondiente a Albarán firmado", vbExclamation
         GoTo HandleExit
     End If
-    sAlbPdf = GetParam("CarpetaAlbaranesPDF") & sAlbPdf
+    'sAlbPdf = GetParam("CarpetaAlbaranesPDF") & sAlbPdf
     sListaAlbs = sAlbPdf & ";"
 EnviarEmail:
     Dim strAdjuntarFicheros As String
