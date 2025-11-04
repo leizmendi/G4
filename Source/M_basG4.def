@@ -396,6 +396,11 @@ Public Function AddAlbaranDet(lIdAECab As Long _
     If lIdPack <> 0 Then
         'Comprueba si el Pack se encuentra ya en otro albarán
         Dim idADet As Variant, idCli As Long
+        idADet = DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab= " & lIdPack & " AND IdAlbaranECab = " & lIdAECab)
+        If Not IsNull(idADet) Then
+            MsgBox "El Pack ya se ha incluido en el albarán", vbExclamation
+            GoTo HandleExit
+        End If
         idADet = DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab= " & lIdPack)
         If Not IsNull(idADet) Then
             'Si el Albarán es del mismo cliente y no se ha devuelto propone si se quiere devolver
@@ -405,13 +410,9 @@ Public Function AddAlbaranDet(lIdAECab As Long _
             End If
             Dim idACab As Long, lIdNewPack As Long
             idACab = DLookup("IdAlbaranECab", "tbAlbaranesEnvioDet", "IdAlbaranEDet= " & idADet)
-            If idACab = lIdAECab Then
-                MsgBox "El Pack ya se ha incluido en el albarán", vbExclamation
-                GoTo HandleExit
-            End If
             idCli = Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & idACab), 0)
             If lIdCli = idCli Then
-                iR = MsgBox("¿Generar devolución del Pack?" & vbCrLf & "Se contabilizará la devolución y se generará nuevo IdPack con el mismo contenido", vbOKCancel + vbQuestion)
+                iR = MsgBox("¿Generar devolución del Pack?" & vbCrLf & "Se contabilizará la devolución y se generará nuevo IdPack con el mismo contenido", vbOKCancel + vbExclamation)
                 If iR = vbOK Then
                     If DevolverPack(lIdPack, lIdAECab, lIdNewPack) = True Then
                         iR = MsgBox("¿Imprimir nueva etiqueta de Pack?", vbOKCancel + vbQuestion + vbDefaultButton1)
@@ -544,7 +545,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume 'HandleExit
+    Resume HandleExit
 End Function
 
 Public Sub AbreAlbaran(lIdAECab As Long)
@@ -1026,6 +1027,8 @@ Public Function DevolverPack(lIdPack As Long, lIdAlbECab As Long, Optional ByRef
         & " From tbAlbaranesEnvioDet as A" _
         & " WHERE A.IdPackCab=" & lIdPack
     CurrentDb.Execute sSQL, dbFailOnError
+    sSQL = "UPDATE tbPacksCab SET PackDevueltoSN = True WHERE IdPackCab = " & lIdPack
+    CurrentDb.Execute sSQL, dbFailOnError
     SetPackEstado lIdPack, Devuelta, 0
     DevolverPack = True
     Dim iR As Integer
@@ -1061,6 +1064,7 @@ Public Function ClonarPack(lIdPack As Long) As Long
         & " WHERE IdPackCab = " & lIdPack
     CurrentDb.Execute sSQL, dbFailOnError
     ClonarPack = lIdNewPack
+    SetPackEstado lIdNewPack, Empaquetado, lIdNewPack
 HandleExit:
     Exit Function
 HandleError:
