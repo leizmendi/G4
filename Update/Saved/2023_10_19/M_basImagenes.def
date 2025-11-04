@@ -1,0 +1,33 @@
+Option Compare Database
+Option Explicit
+
+Public Sub ObtenerDimensionesImagen(rutaArchivo As String, ByRef ancho As Long, ByRef alto As Long)
+    On Error GoTo HandleError
+    Dim imagen As Object
+    
+    ' Seleccionar el archivo de imagen
+    'Application.GetOpenFilename("Imágenes (*.jpg;*.jpeg;*.png),*.jpg;*.jpeg;*.png")
+    
+    ' Salir si no se selecciona ningún archivo
+    If rutaArchivo = "False" Then Exit Sub
+    
+    ' Crear un objeto de imagen
+    Set imagen = CreateObject("WIA.ImageFile")
+    
+    ' Cargar la imagen desde el archivo
+    imagen.LoadFile rutaArchivo
+    
+    ' Obtener las dimensiones de la imagen
+    ancho = imagen.Width
+    alto = imagen.Height
+    
+    ' Mostrar las dimensiones en una ventana de mensaje
+    'MsgBox "Dimensiones de la imagen:" & vbCrLf & "Ancho: " & ancho & " píxeles" & vbCrLf & "Alto: " & alto & " píxeles", vbInformation, "Información de la imagen"
+    
+    
+HandleExit:
+    Exit Sub
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Sub

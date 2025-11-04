@@ -1,0 +1,15 @@
+{"FCRE0": "UPDATE sysBusquedas SET sysBusquedas.strSQL = ''SELECT tbFacturasCab.IdFacturaCab, tbFacturasCab.CabeceraCliente, tbFacturasCab.NumFactura, tbFacturasCab.FechaFactura, tbFacturasCab.Importe
+FROM tbFacturasCab INNER JOIN tbClientes ON tbFacturasCab.IdCliente = tbClientes.IdCliente
+WHERE tbFacturasCab.NumRecibo Is Null
+ORDER BY tbFacturasCab.FechaFactura DESC , tbFacturasCab.NumFactura DESC;'', sysBusquedas.Titulo = ''Facturas sin recibo'' 
+WHERE (((sysBusquedas.CodBusqueda)=''FCRE0''));
+",
+"FCRE1": "UPDATE sysBusquedas SET sysBusquedas.Titulo = ''Todas las Facturas'', sysBusquedas.CodOtraBusqueda = ''FCRE0'' 
+WHERE (((sysBusquedas.CodBusqueda)=''FCRE1''));
+",
+"RECDV": "INSERT INTO sysBusquedas(CodBusqueda, strSQL, NumColumnas, AnchoColumnas, Titulo, CodOtraBusqueda, Predeterminada)
+ VALUES(''RECDV'', ''SELECT tbRecibos.NUMRECIBO, tbRecibos.NOMBRE, tbRecibos.CONCEPTO, tbRecibosEmisiones.FechaCargo, tbRecibos.IMPORTE 
+FROM tbRecibosEmisiones INNER JOIN tbRecibos ON tbRecibosEmisiones.IdReciboEmision = tbRecibos.IdReciboEmision 
+WHERE (((tbRecibos.ReciboDevuelto)=True) AND ((Nz([NuevoRecibo],0))=0))
+ORDER BY tbRecibos.NUMRECIBO;'', 5, ''1cm;5cm'',''Seleccione Recibos'',''RECDV'',True)"
+}

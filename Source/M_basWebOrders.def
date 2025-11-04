@@ -87,7 +87,7 @@ Public Function OrderImportar(lIdOrder As Long, lIdCli As Long) As Boolean
     sEntrega = Trim(rsO("payment_address_1") & " " & rsO("payment_address_2")) & " " & rsO("payment_city") _
              & vbCrLf & rsO("email") & " - " & rsO("telephone")
     sEntrega = Replace(Replace(sEntrega, """", ""), "'", "")
-    sNotas = Nz(rsO("comment"), "")
+    sNotas = Replace(Nz(rsO("comment"), ""), "'", "''")
     sSQL = "INSERT INTO tbPedidosCab(IdCliente, NumPedido, FechaRegistro, Notas, DireccionEntrega, idOrder)" _
         & " VALUES(" & lIdCli & ", " & lNumPedido & ", " & CLng(DateValue(rsO("created_date"))) & ", " & ConComillas(sNotas, True) & ", " & ConComillas(sEntrega, True) & ", " & lIdOrder & ")"
     CurrentDb.Execute sSQL, dbFailOnError

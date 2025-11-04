@@ -1,0 +1,73 @@
+Option Compare Database
+Option Explicit
+
+Public Function Copia_Auto_Seguridad()
+    Dim strFileDat As String
+    Dim strFileName As String
+    Dim strCarpeta As String
+    Dim varCarpeta As Variant
+    Dim strSQL As String, strComando As String, strFD As String
+    Dim i As Integer, j As Integer, z As Integer
+    On Error GoTo Error_Copia_Auto_Seguridad
+Ini:
+    varCarpeta = Nz(GetParam("CarpetaCopiaSeguridad"), "")
+    If Len(varCarpeta) = 0 Then
+        strCarpeta = DirectorioDe(CurrentDb.Name) & "CopiaG4"
+        SetParam "CarpetaCopiaSeguridad", strCarpeta
+    Else
+        strCarpeta = CStr(varCarpeta)
+    End If
+    If Dir(strCarpeta, vbDirectory) = "" And InStr(strCarpeta, "Google") = 0 Then
+        MkDir strCarpeta
+    End If
+    If Right(strCarpeta, 1) <> "\" Then
+        strCarpeta = strCarpeta & "\"
+    End If
+    strFileName = strCarpeta & "CS" & Format(Date, "yyww") & ".bak"
+    If strFileName = "" Then Exit Function
+    strFileDat = Nz(GetParam("CopiaSeguridadArchivos"), "")
+    j = 1
+Bucle:
+    Dim strFileI As String
+    i = InStr(j, strFileDat, ",")
+    If i = 0 Then
+        strFileI = Trim(Mid(strFileDat, j))
+        If DLookup("DirectorioActual", "1myConexionTablas", "FicheroDeConexion Like " & ConComillas(strFileI)) = True Then
+            strFD = strFD & " " & ConComillas(DirectorioDe(CurrentDb.Name) & strFileI)
+        Else
+            strFD = strFD & " " & ConComillas(DLookup("DirectorioDeConexion", "1myConexionTablas", "FicheroDeConexion Like " & ConComillas(strFileI)) & strFileI)
+        End If
+    Else
+        strFileI = Trim(Mid(strFileDat, j, i - j))
+        If DLookup("DirectorioActual", "1myConexionTablas", "FicheroDeConexion Like " & ConComillas(strFileI)) = True Then
+            strFD = strFD & " " & ConComillas(DirectorioDe(CurrentDb.Name) & strFileI)
+        Else
+            strFD = strFD & " " & ConComillas(DLookup("DirectorioDeConexion", "1myConexionTablas", "FicheroDeConexion Like " & ConComillas(strFileI)) & strFileI)
+        End If
+        j = i + 1
+        GoTo Bucle
+    End If
+    'FileCopy strFileDat, strFileName
+    'WaitShell "XCOPY " & strFileDat & " " & strFileName & " /I", vbMaximizedFocus
+''''''''''''''''''''"C:\Archivos de programa\WinZip\WZZIP.EXE" -& a:c4dat.zip  D:\_DOCS1_\PEDRO\Gers\c4DAT.mdb
+    strComando = ConComillas(Nz(GetParam("CopiaSeguridadComando"), ""))
+    Shell strComando & " " & ConComillas(strFileName) & " " & strFD, vbHide
+    
+Salir_Copia_Auto_Seguridad:
+    Exit Function
+Error_Copia_Auto_Seguridad:
+    Select Case Err
+        Case 76 ' no se ha encontrado la ruta (no existe la carpeta...)
+            If z = 0 Then
+                CurrentDb.Execute "DELETE * FROM cfgparam WHERE NP = 'Copia_Auto_SeguridadCarpeta'"
+                z = 1
+                Resume Ini
+            Else
+                MsgBox "Error nº " & Err & " en Copia_Auto_Seguridad" & vbCrLf & Err.Description
+                Resume Salir_Copia_Auto_Seguridad
+            End If
+        Case Else
+            MsgBox "Error nº " & Err & " en Copia_Auto_Seguridad" & vbCrLf & Err.Description
+            Resume Salir_Copia_Auto_Seguridad
+    End Select
+End Function

@@ -172,7 +172,7 @@ On Error GoTo Errores_Rutina
         'RegistroCabeceraAcreedorFechaCobro.C09_DireccionAcreedor_D3 = HojaAcreedor.Range("B10")
         'RegistroCabeceraAcreedorFechaCobro.C10_PaisAcreedor = HojaAcreedor.Range("B11")
         If rs("IBAN") <> "" Then
-            RegistroCabeceraAcreedorFechaCobro.C11_CuentaAcreedor = rs("IBAN")
+            RegistroCabeceraAcreedorFechaCobro.C11_CuentaAcreedor = Replace(rs("IBAN"), "-", "")
         End If
         RegistroCabeceraAcreedorFechaCobro.C12_Libre = " "
         RegistroCabeceraAcreedorFechaCobro.CR = vbCrLf

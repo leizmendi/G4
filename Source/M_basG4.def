@@ -8,6 +8,7 @@ Enum PrendaEstado
     Empaquetado
     Cliente
     Baja
+    Devuelta
 End Enum
 
 Public Function PEstado_str(iPrendaEstado As PrendaEstado) As String
@@ -18,6 +19,7 @@ Public Function PEstado_str(iPrendaEstado As PrendaEstado) As String
         Case Empaquetado: PEstado_str = "E"
         Case Cliente: PEstado_str = "C"
         Case Baja: PEstado_str = "B"
+        Case Devuelta: PEstado_str = "D"
         Case Else: PEstado_str = "?"
     End Select
 End Function
@@ -30,6 +32,7 @@ Public Function PEstado_num(sDestino As String) As PrendaEstado
         Case "E": PEstado_num = Empaquetado
         Case "C": PEstado_num = Cliente
         Case "B": PEstado_num = Baja
+        Case "D": PEstado_num = Devuelta
         Case Else: PEstado_num = -1
     End Select
 End Function
@@ -392,7 +395,37 @@ Public Function AddAlbaranDet(lIdAECab As Long _
     If Nz(DLookup("ComunitarioSN", "tbClientes", "IdCliente = " & lIdCli), False) = True Then cIVA = 0
     If lIdPack <> 0 Then
         'Comprueba si el Pack se encuentra ya en otro albarán
-        If Not IsNull(DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab = " & lIdPack)) Then
+        Dim idADet As Variant, idCli As Long
+        idADet = DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab= " & lIdPack)
+        If Not IsNull(idADet) Then
+            'Si el Albarán es del mismo cliente y no se ha devuelto propone si se quiere devolver
+            If Nz(DLookup("PackDevueltoSN", "tbPacksCab", "IdPackCab = " & lIdPack), False) = True Then
+                MsgBox "El Pack ya se ha devuelto, se debe volver a etiquetar con un nuevo IdPack", vbExclamation
+                GoTo HandleExit
+            End If
+            Dim idACab As Long, lIdNewPack As Long
+            idACab = DLookup("IdAlbaranECab", "tbAlbaranesEnvioDet", "IdAlbaranEDet= " & idADet)
+            If idACab = lIdAECab Then
+                MsgBox "El Pack ya se ha incluido en el albarán", vbExclamation
+                GoTo HandleExit
+            End If
+            idCli = Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & idACab), 0)
+            If lIdCli = idCli Then
+                iR = MsgBox("¿Generar devolución del Pack?" & vbCrLf & "Se contabilizará la devolución y se generará nuevo IdPack con el mismo contenido", vbOKCancel + vbQuestion)
+                If iR = vbOK Then
+                    If DevolverPack(lIdPack, lIdAECab, lIdNewPack) = True Then
+                        iR = MsgBox("¿Imprimir nueva etiqueta de Pack?", vbOKCancel + vbQuestion + vbDefaultButton1)
+                        If iR = vbOK Then
+                            DoCmd.OpenReport "rptEtiquetaPack", DimeView, , "IdPackCab = " & lIdNewPack
+                        End If
+                    End If
+                End If
+                GoTo HandleExit
+            Else
+                MsgBox "El Pack se encuentra ya en un albarán de otro cliente", vbExclamation
+                GoTo HandleExit
+            End If
+            
             Dim sAlb As String
             sAlb = DLookup("[Numero] & ' del ' & [Fecha]", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & DLookup("IdAlbaranECab", "tbAlbaranesEnvioDet", "IdAlbaranEDet = " & DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab = " & lIdPack)))
             MsgBox "El Pack se encuentra ya incluido en el albarán Nº " & sAlb, vbExclamation
@@ -511,7 +544,7 @@ HandleExit:
     Exit Function
 HandleError:
     MsgBox Err.Description
-    Resume HandleExit
+    Resume 'HandleExit
 End Function
 
 Public Sub AbreAlbaran(lIdAECab As Long)
@@ -981,3 +1014,56 @@ HandleError:
     MsgBox Err.Description
     Resume HandleExit
 End Sub
+
+Public Function DevolverPack(lIdPack As Long, lIdAlbECab As Long, Optional ByRef IdNuevoPack As Long) As Boolean
+    'Genera líneas de devolución de albarán en lIdAlbECab
+    'Modifica Estado de Pack a Devuelto
+    'Genera nuevo IdPack con mismas prendas
+    On Error GoTo HandleError
+    Dim sSQL As String
+    sSQL = "INSERT INTO tbAlbaranesEnvioDet ( IdPackCab, IdAlbaranECab, IdPrecio, Cantidad, Concepto, Base, IVA, Importe, Precio )" _
+        & " SELECT A.IdPackCab, " & lIdAlbECab & " AS idAlbCab, A.IdPrecio, [Cantidad]*-1 AS Cant, A.Concepto, [Base]*-1 AS base_, A.IVA, [Importe]*-1 AS imp, A.Precio" _
+        & " From tbAlbaranesEnvioDet as A" _
+        & " WHERE A.IdPackCab=" & lIdPack
+    CurrentDb.Execute sSQL, dbFailOnError
+    SetPackEstado lIdPack, Devuelta, 0
+    DevolverPack = True
+    Dim iR As Integer
+    iR = MsgBox("¿Generar nuevo IdPack con el mismo paquete?", vbOKCancel + vbQuestion)
+    If iR = vbOK Then IdNuevoPack = ClonarPack(lIdPack)
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
+
+Public Function ClonarPack(lIdPack As Long) As Long
+    'Genera Nuevo Pack con identico contenido de prendas
+    'Modifica Estado de Pack a Empaquetado
+    'Genera nuevo IdPack con mismas prendas
+    On Error GoTo HandleError
+    Dim sSQL As String, sNow As String, lIdNewPack As Long
+    sNow = Format(Now(), "yyyy/mm/dd hh:nn:ss")
+    sSQL = "INSERT INTO tbPacksCab ( FechaPack, Contenido, Peso )" _
+        & " SELECT #" & sNow & "#,P.Contenido, P.Peso" _
+        & " From tbPacksCab as P" _
+        & " WHERE P.IdPackCab=" & lIdPack
+    CurrentDb.Execute sSQL, dbFailOnError
+    lIdNewPack = Nz(DLookup("IdPackCab", "tbPacksCab", "FechaPack = #" & sNow & "#"), 0)
+    If lIdNewPack = 0 Then
+        MsgBox "No se encontró Nuevo Pack", vbExclamation
+        GoTo HandleExit
+    End If
+    sSQL = "INSERT INTO tbPacksDet(IdPackCab, IdPrenda)" _
+        & " SELECT " & lIdNewPack & ", IdPrenda" _
+        & " FROM tbPacksDet" _
+        & " WHERE IdPackCab = " & lIdPack
+    CurrentDb.Execute sSQL, dbFailOnError
+    ClonarPack = lIdNewPack
+HandleExit:
+    Exit Function
+HandleError:
+    MsgBox Err.Description
+    Resume HandleExit
+End Function
