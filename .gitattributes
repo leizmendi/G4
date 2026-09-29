@@ -1,0 +1,23 @@
+# Normalizacion de fin de linea / encoding.
+# El repo se accede indistintamente desde Windows y desde Linux/WSL: estas reglas
+# fijan el comportamiento en git mismo (checkin/checkout) para que sea identico
+# en ambos sistemas, sin depender de core.autocrlf de cada maquina.
+
+# Texto normal: se normaliza a LF al commitear y se hace checkout siempre en LF.
+* text=auto eol=lf
+
+# Los .def se exportan de Access con su propio encoding (cp1252 o UTF-16LE)
+# y deben tratarse como bytes opacos: git no debe tocar EOL ni
+# reinterpretarlos como texto UTF-8 bajo ningun concepto.
+*.def -text
+
+# Binarios explicitos.
+*.rar -text
+*.bak -text
+*.accdb -text
+*.accde -text
+*.mdb -text
+*.MDB -text
+*.msi -text
+*.exe -text
+*.wav -text
