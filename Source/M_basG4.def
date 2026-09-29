@@ -377,16 +377,31 @@ Public Function AddAlbaranDet(lIdAECab As Long _
                     , Optional lIdServicio As Long = 0 _
                     , Optional lIdPTM As Long = 0 _
                     , Optional iCantidad As Integer = 0 _
+                    , Optional bLectura As Boolean = False _
+                    , Optional bIncluirSinPedido As Boolean = False _
+                    , Optional ByRef bSinPedido As Boolean = False _
+                    , Optional ByRef lIdPedidoDetServido As Long = 0 _
+                    , Optional ByRef lIdAEDetNuevo As Long = 0 _
+                    , Optional ByRef sResultado As String = "" _
                     ) As Integer
     'Genera un nuevo registro en tbAlbaranesEnvioDet y si va todo bien devuelve cantidad de líneas de detalle añadidas
     'En caso de pasarse IdPack se obtiene el resto de datos del Pack
     'El precio se deberá calcular por el Cliente + Servicio + PTM ... veremos a ver ...
+    'bLectura = True: lectura de códigos a distancia -> avisa con sonidos en lugar de MsgBox:
+    '   chimes: completa línea de pedido / ding: añadido / inv x2: sin línea de pedido pendiente (no se incluye y devuelve bSinPedido = True) / chord: Pack repetido, no existe o vacío
+    '   bIncluirSinPedido = True: se incluye aunque no haya línea de pedido pendiente (confirmación por relectura)
+    'Devuelve en lIdPedidoDetServido y lIdAEDetNuevo la última línea de pedido servida y la última línea de albarán añadida
+    'y en sResultado el texto del resultado (lo añadido o el motivo por el que no se ha añadido)
     On Error GoTo HandleError
+    Dim bError As Boolean, bLineaCompleta As Boolean, sPack As String, sAnadidos As String
+    If lIdPack <> 0 Then sPack = "P" & Format(lIdPack, "0000") & ": "
+    sResultado = ""
     Dim sSQL As String, lNum As Long, lIdCli As Long, lIdTarifa As Long, i As Integer
     Dim rs As Recordset, lIdPre As Long, cPre As Currency, cBase As Currency, cImporte As Currency, cIVA As Currency, bIVAinc As Boolean, sConcepto As String
     Dim rsP As Recordset, lIdAEDet As Long, iR As Integer
     lIdCli = Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & lIdAECab), 0)
     If lIdCli = 0 Then
+        sResultado = sPack & "no se encontró Cliente en el albarán"
         MsgBox "No se encontró Cliente en el Albarán", vbExclamation
         GoTo HandleExit
     End If
@@ -398,13 +413,19 @@ Public Function AddAlbaranDet(lIdAECab As Long _
         Dim idADet As Variant, idCli As Long
         idADet = DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab= " & lIdPack & " AND IdAlbaranECab = " & lIdAECab)
         If Not IsNull(idADet) Then
-            MsgBox "El Pack ya se ha incluido en el albarán", vbExclamation
+            sResultado = sPack & "ya está incluido en este albarán"
+            If bLectura Then
+                bError = True
+            Else
+                MsgBox "El Pack ya se ha incluido en el albarán", vbExclamation
+            End If
             GoTo HandleExit
         End If
         idADet = DLookup("IdAlbaranEDet", "tbAlbaranesEnvioDet", "IdPackCab= " & lIdPack)
         If Not IsNull(idADet) Then
             'Si el Albarán es del mismo cliente y no se ha devuelto propone si se quiere devolver
             If Nz(DLookup("PackDevueltoSN", "tbPacksCab", "IdPackCab = " & lIdPack), False) = True Then
+                sResultado = sPack & "ya se ha devuelto, se debe volver a etiquetar con un nuevo IdPack"
                 MsgBox "El Pack ya se ha devuelto, se debe volver a etiquetar con un nuevo IdPack", vbExclamation
                 GoTo HandleExit
             End If
@@ -412,6 +433,7 @@ Public Function AddAlbaranDet(lIdAECab As Long _
             idACab = DLookup("IdAlbaranECab", "tbAlbaranesEnvioDet", "IdAlbaranEDet= " & idADet)
             idCli = Nz(DLookup("IdCliente", "tbAlbaranesEnvioCab", "IdAlbaranECab = " & idACab), 0)
             If lIdCli = idCli Then
+                sResultado = sPack & "está en otro albarán del cliente (devolución)"
                 iR = MsgBox("¿Generar devolución del Pack?" & vbCrLf & "Se contabilizará la devolución y se generará nuevo IdPack con el mismo contenido", vbOKCancel + vbExclamation)
                 If iR = vbOK Then
                     If DevolverPack(lIdPack, lIdAECab, lIdNewPack) = True Then
@@ -423,6 +445,7 @@ Public Function AddAlbaranDet(lIdAECab As Long _
                 End If
                 GoTo HandleExit
             Else
+                sResultado = sPack & "está en un albarán de otro cliente"
                 MsgBox "El Pack se encuentra ya en un albarán de otro cliente", vbExclamation
                 GoTo HandleExit
             End If
@@ -440,6 +463,7 @@ Public Function AddAlbaranDet(lIdAECab As Long _
         End If
         lIdTarifa = Nz(DLookup("IdTarifa", "tbClientes", "IdCliente = " & lIdCli), 0)
         If lIdTarifa = 0 Then
+            sResultado = sPack & "el Cliente no tiene asignada la tarifa"
             MsgBox "El Cliente no tiene asignada la tarifa", vbExclamation
             GoTo HandleExit
         End If
@@ -449,6 +473,26 @@ Public Function AddAlbaranDet(lIdAECab As Long _
             & " WHERE tbPacksDet.IdPackCab = " & lIdPack _
             & " GROUP BY tbPrendas.IdPrendaTipoMedida;"
         Set rs = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+        If rs.EOF Then
+            bError = True
+            sResultado = sPack & "Pack no encontrado o vacío"
+        End If
+        If bLectura And Not bIncluirSinPedido And Not rs.EOF Then
+            'Si alguna prenda del Pack no tiene línea de pedido pendiente no se incluye nada, a la espera de confirmación
+            While Not rs.EOF
+                Set rsP = CurrentDb.OpenRecordset(SQL_PedidoDetPendiente(lIdCli, IdPTM_base(rs("IdPrendaTipoMedida"))), dbOpenSnapshot)
+                If rsP.EOF Then
+                    bSinPedido = True
+                    sResultado = sResultado & ", " & DimePrendaTipoMedida(IdPTM_base(rs("IdPrendaTipoMedida")))
+                End If
+                rs.MoveNext
+            Wend
+            If bSinPedido Then
+                sResultado = sPack & "sin línea de pedido pendiente de servir: " & Mid(sResultado, 3) & ". Vuelva a leerlo para incluirlo"
+                GoTo HandleExit
+            End If
+            rs.MoveFirst
+        End If
         While Not rs.EOF
             'Comprueba y selecciona posibles precios del servicio - cliente - TipoPrendaMedida, en caso de existir más de una opción ofrece la selección
             sSQL = "SELECT tbPrecios.IdPrecio, Concepto, tbPrecios.Precio" _
@@ -462,14 +506,17 @@ Public Function AddAlbaranDet(lIdAECab As Long _
                 sConcepto = Nz(DLookup("Concepto", "tbPrecios", "IdPrecio = " & lIdPre), 0)
                 lIdPTM = Nz(DLookup("IdPTM", "tbPrecios", "IdPrecio = " & lIdPre), 0)
                 lIdPTM = IdPTM_base(lIdPTM)
-                sSQL = "SELECT D.IdPedidoDet, D.IdPedidoCab" _
-                    & " FROM (tbPedidosCab as C INNER JOIN tbPedidosDet as D ON C.IdPedidoCab = D.IdPedidoCab) LEFT JOIN qCServidaDet as Q ON D.IdPedidoDet = Q.IdPedidoDet" _
-                    & " WHERE C.EntregadoSN = False And C.IdCliente = " & lIdCli & " And D.IdPrendaTipoMedida = " & lIdPTM & " And ([Cantidad] - Nz(Q.CServidaDet,0)) > 0" _
-                    & " ORDER BY D.IdPedidoDet;"
-                Set rsP = CurrentDb.OpenRecordset(sSQL, dbOpenSnapshot)
+                Set rsP = CurrentDb.OpenRecordset(SQL_PedidoDetPendiente(lIdCli, lIdPTM), dbOpenSnapshot)
                 If rsP.EOF Then
-                    iR = MsgBox("No se encontró línea de Pedido del Cliente pendiente de servir " & DimePrendaTipoMedida(lIdPTM) & vbCrLf & "¿¿Incluir en albarán de todos modos?", vbOKCancel + vbQuestion)
-                    If iR = vbCancel Then GoTo Segi
+                    If bLectura Then
+                        If Not bIncluirSinPedido Then
+                            bSinPedido = True
+                            GoTo Segi
+                        End If
+                    Else
+                        iR = MsgBox("No se encontró línea de Pedido del Cliente pendiente de servir " & DimePrendaTipoMedida(lIdPTM) & vbCrLf & "¿¿Incluir en albarán de todos modos?", vbOKCancel + vbQuestion)
+                        If iR = vbCancel Then GoTo Segi
+                    End If
                 End If
                 'Añade líneas de detalle
                 sSQL = "INSERT INTO tbAlbaranesEnvioDet (IdAlbaranECab,IdPackCab,IdPrecio, Concepto, Cantidad, Precio, Base, IVA, Importe)"
@@ -484,11 +531,19 @@ Public Function AddAlbaranDet(lIdAECab As Long _
                 sSQL = sSQL & " VALUES(" & lIdAECab & ", " & lIdPack & ", " & lIdPre & ", " & ConComillas(sConcepto) & ", " & ComaPunto(rs("Cantidad")) & ", " & ComaPunto(cPre) & ", " & ComaPunto(cBase) & ", " & ComaPunto(cIVA) & ", " & ComaPunto(cImporte) & ")"
                 CurrentDb.Execute sSQL, dbFailOnError
                 lIdAEDet = DMax("IdAlbaranEDet", "tbAlbaranesEnvioDet")
+                lIdAEDetNuevo = lIdAEDet
+                sAnadidos = sAnadidos & ", " & sConcepto & IIf(rsP.EOF, " (sin pedido)", "")
                 If Not rsP.EOF Then
+                    lIdPedidoDetServido = rsP("IdPedidoDet")
                     'Añade líneas de enlace entre pedidodet y albarandet
                     sSQL = "INSERT INTO tbPDetAEDet(IdPedidoDet, IdAlbaranEDet)" _
                         & " VALUES(" & rsP("IdPedidoDet") & ", " & lIdAEDet & ")"
                     CurrentDb.Execute sSQL, dbFailOnError
+                    'Comprobar si con este Pack se completa la línea de pedido
+                    If Nz(DLookup("CServidaDet", "qCServidaDet", "IdPedidoDet = " & rsP("IdPedidoDet")), 0) >= Nz(DLookup("Cantidad", "tbPedidosDet", "IdPedidoDet = " & rsP("IdPedidoDet")), 0) Then
+                        bLineaCompleta = True
+                        sAnadidos = sAnadidos & " (línea de pedido completada)"
+                    End If
                     'Comprobar si el pedido está ya servido
                     SiPedidoServidoSN_MarcarComoEntregadoSN rsP("IdPedidoCab")
                     'If PedidoServido(rsP("IdPedidoCab")) Then
@@ -538,14 +593,40 @@ Segi:
             
     End If
     
-
-        
+    AddAlbaranDet = i
+    If i > 0 Then
+        sResultado = sPack & "añadido " & Mid(sAnadidos, 3)
+    ElseIf sResultado = "" Then
+        sResultado = sPack & "no se ha añadido"
+    End If
     
 HandleExit:
+    If bLectura Then
+        If bError Then
+            Play GetCarpetaSonidos() & "chord.wav"
+        ElseIf bSinPedido Then
+            Play GetCarpetaSonidos() & "inv.wav"
+            Play GetCarpetaSonidos() & "inv.wav"
+        ElseIf bLineaCompleta Then
+            Play GetCarpetaSonidos() & "chimes.wav"
+        ElseIf i > 0 Then
+            Play GetCarpetaSonidos() & "ding.wav"
+        End If
+    End If
     Exit Function
 HandleError:
+    bError = True
+    sResultado = sPack & "Error: " & Err.Description
     MsgBox Err.Description
     Resume HandleExit
+End Function
+
+Private Function SQL_PedidoDetPendiente(lIdCli As Long, lIdPTM As Long) As String
+    'Líneas de pedido del cliente y de esa PTM pendientes de servir
+    SQL_PedidoDetPendiente = "SELECT D.IdPedidoDet, D.IdPedidoCab" _
+        & " FROM (tbPedidosCab as C INNER JOIN tbPedidosDet as D ON C.IdPedidoCab = D.IdPedidoCab) LEFT JOIN qCServidaDet as Q ON D.IdPedidoDet = Q.IdPedidoDet" _
+        & " WHERE C.EntregadoSN = False And C.IdCliente = " & lIdCli & " And D.IdPrendaTipoMedida = " & lIdPTM & " And ([Cantidad] - Nz(Q.CServidaDet,0)) > 0" _
+        & " ORDER BY D.IdPedidoDet;"
 End Function
 
 Public Sub AbreAlbaran(lIdAECab As Long)
